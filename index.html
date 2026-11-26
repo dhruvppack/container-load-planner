@@ -285,6 +285,10 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
 .pic{display:flex;flex-direction:column;gap:6px;min-width:0}
 .pic svg{width:100%;height:auto;display:block;background:var(--sunk);border-radius:8px}
 .pic .cap{font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.v3d.c3d{height:clamp(280px,44vw,480px)}
+.ccard{cursor:pointer}
+.ccard.viewing{outline:3px solid var(--accent);outline-offset:-1px}
+.ccard.viewing .ct b::after{content:' · in 3D';color:var(--accent);font-weight:600}
 .calcbtn{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:6px 12px;font:600 12px var(--body);cursor:pointer;white-space:nowrap;flex:none}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -508,6 +512,28 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
       </div>
       <div class="calc-out">
         <div class="ccards" id="calcCards"></div>
+        <section class="panel" id="c3dWrap">
+          <div class="row between">
+            <h2>3D view · one container</h2>
+            <div class="opts" role="group" aria-label="Which result to show">
+              <button class="opt" type="button" data-c3d="loose">Loose</button>
+              <button class="opt" type="button" data-c3d="p1">Pallets 1 high</button>
+              <button class="opt" type="button" data-c3d="p2">Pallets 2 high</button>
+            </div>
+          </div>
+          <div class="viewer" id="c3dBox">
+            <div class="v3d c3d" id="c3d" aria-label="3D view of the container filled with boxes. Drag to rotate, pinch or scroll to zoom."></div>
+            <div class="vtools" role="group" aria-label="Camera">
+              <button class="vbtn" data-ccam="iso" type="button">3D</button>
+              <button class="vbtn" data-ccam="top" type="button">Top</button>
+              <button class="vbtn" data-ccam="side" type="button">Side</button>
+              <button class="vbtn" data-ccam="doors" type="button">From doors</button>
+            </div>
+            <div class="vhint">Drag to rotate · pinch to zoom · two fingers to pan</div>
+          </div>
+          <div class="vfail" id="c3dFail" hidden>The 3D view could not load here. The patterns below show the same result.</div>
+          <div class="hint" id="c3dNote"></div>
+        </section>
         <section class="panel" id="calcPics"></section>
       </div>
     </div>
@@ -1303,7 +1329,7 @@ const PALLETS={
   HALF:{label:'Half EUR pallet 80 × 60',L:80,W:60,H:14.4,kg:10},
   CUSTOM:{label:'Custom'}
 };
-const CALC_DEF={l:60,w:40,h:40,kg:12,rot:'floor',pt:'EUR',pl:120,pw:80,ph:14.4,pkg:25,maxH:160,maxKg:1000};
+const CALC_DEF={view:'',l:60,w:40,h:40,kg:12,rot:'floor',pt:'EUR',pl:120,pw:80,ph:14.4,pkg:25,maxH:160,maxKg:1000};
 if(!state.calc) state.calc=Object.assign({},CALC_DEF);
 const fx=(len,s)=>s>0?Math.floor((len+E)/s):0;
 /* best way to lay a×b rectangles on an L×W area: straight grid or two blocks with the second block turned 90° */
@@ -1325,9 +1351,10 @@ function calcLoose(k,c){
   for(const [a,b,h] of boxUprights(k)){
     const pat=best2D(c.L,c.W,a,b), layers=fx(c.H,h); let n=pat.n*layers, top=0;
     const gap=c.H-layers*h;
-    if(k.rot==='any') for(const [a2,b2,h2] of boxUprights(k)){ if(h2<=gap+E){ const t=best2D(c.L,c.W,a2,b2).n*fx(gap,h2); if(t>top) top=t; } }
+    let topInfo=null;
+    if(k.rot==='any') for(const [a2,b2,h2] of boxUprights(k)){ if(h2<=gap+E){ const tp=best2D(c.L,c.W,a2,b2), t=tp.n*fx(gap,h2); if(t>top){ top=t; topInfo={pat:tp,h:h2,layers:fx(gap,h2)}; } } }
     n+=top;
-    if(!best||n>best.n) best={n,pat,layers,top,h,a,b};
+    if(!best||n>best.n) best={n,pat,layers,top,topInfo,h,a,b};
   }
   if(!best||!best.n) return null;
   const byW=k.kg>0?fx(c.payload,k.kg):Infinity;
@@ -1386,7 +1413,7 @@ function renderCalc(){
   const boxV=k.l*k.w*k.h, cV=c.L*c.W*c.H;
   const bestN=Math.max(loose?.n||0,p1?.n||0,p2?.n||0);
   const limTxt=(r,unit)=>r.limit==='payload'?`<div class="lim w">Limited by payload. Space allows ${(unit==='p'?r.spacePallets*r.per:r.space).toLocaleString('en-US')} boxes.</div>`:`<div class="lim">Limited by space</div>`;
-  const card=(title,r,body,key)=>`<div class="ccard${r&&r.n===bestN&&bestN>0?' best':''}"><div class="ct"><b>${title}</b>${r&&r.n===bestN&&bestN>0?'<span class="ist ok">Most boxes</span>':''}</div>${r?body:'<div class="na">'+(key==='p2'?'Two pallets do not fit on top of each other in this container.':'Enter box and pallet sizes.')+'</div>'}${r?`<button class="btn" type="button" data-calcadd="${key}">Add to cargo list</button>`:''}</div>`;
+  const card=(title,r,body,key)=>`<div class="ccard${r&&r.n===bestN&&bestN>0?' best':''}" data-key="${key}"><div class="ct"><b>${title}</b>${r&&r.n===bestN&&bestN>0?'<span class="ist ok">Most boxes</span>':''}</div>${r?body:'<div class="na">'+(key==='p2'?'Two pallets do not fit on top of each other in this container.':'Enter box and pallet sizes.')+'</div>'}${r?`<button class="btn" type="button" data-calcadd="${key}">Add to cargo list</button>`:''}</div>`;
   const pct=n=>(n*boxV/cV*100).toFixed(0)+'%';
   const looseBody=loose&&`<div class="big">${loose.n.toLocaleString('en-US')} <small>boxes</small></div><dl>
     <dt>Per layer on floor</dt><dd>${loose.pat.n}</dd><dt>Layers high</dt><dd>${loose.layers}${loose.top?' + top '+loose.top:''}</dd>
@@ -1403,9 +1430,88 @@ function renderCalc(){
   if(p1) pics+=`<div class="pic"><span class="cap">One pallet layer (${p1.pat.n} boxes)</span>${patSVG(k.pl,k.pw,p1.pat.rects(),col,'Boxes on one pallet layer')}</div>`;
   if(pr) pics+=`<div class="pic"><span class="cap">Pallets on the floor (${pr.floor.n})</span>${patSVG(c.L,c.W,pr.floor.rects(),pcol,'Pallets on the container floor')}</div>`;
   $('#calcPics').innerHTML=pics?`<h2>Patterns · top view, front wall on the left</h2><div class="pics">${pics}</div><div class="hint">Quick check using straight and mixed (turned) patterns. The full 3D plan can still place a few more or fewer units; use Add to cargo list to check it there.</div>`:'<div class="hint">Enter a box size to see the patterns.</div>';
+  if(!state.calc.view||!calcRes[state.calc.view]){ const order=['loose','p1','p2'].filter(x=>calcRes[x]).sort((a,b)=>calcRes[b].n-calcRes[a].n); state.calc.view=order[0]||'loose'; }
+  calc3DBuild();
   store('clp.draft',state);
 }
-function openCalc(){ if(!state.calc) state.calc=Object.assign({},CALC_DEF); fillCalcInputs(); renderUnits(); renderCalc(); $('#calcSheet').hidden=false; document.body.style.overflow='hidden'; $('#bxL').focus(); }
+/* ---------- box calculator 3D view (own scene, separate from the load plan) ---------- */
+const CV={ok:false,init:false,mode:'iso'};
+function calc3DInit(){
+  if(CV.init) return; CV.init=true;
+  if(!window.THREE||!THREE.OrbitControls){ $('#c3dBox').hidden=true; $('#c3dFail').hidden=false; return; }
+  try{
+    const el=$('#c3d'); const ren=new THREE.WebGLRenderer({antialias:true,alpha:true}); ren.setPixelRatio(Math.min(2,window.devicePixelRatio||1)); el.appendChild(ren.domElement);
+    const scene=new THREE.Scene(); const cam=new THREE.PerspectiveCamera(35,1,0.05,300);
+    scene.add(new THREE.AmbientLight(0xffffff,0.62)); const d1=new THREE.DirectionalLight(0xffffff,0.55); d1.position.set(6,12,9); scene.add(d1); const d2=new THREE.DirectionalLight(0xffffff,0.22); d2.position.set(-8,5,-6); scene.add(d2);
+    const ctl=new THREE.OrbitControls(cam,ren.domElement); ctl.screenSpacePanning=true; ctl.addEventListener('change',()=>ren.render(scene,cam));
+    Object.assign(CV,{ok:true,el,ren,scene,cam,ctl,world:null});
+    new ResizeObserver(()=>calc3DSize()).observe(el);
+  }catch(e){ CV.ok=false; $('#c3dBox').hidden=true; $('#c3dFail').hidden=false; }
+}
+function calc3DSize(){ if(!CV.ok) return; const w=CV.el.clientWidth,h=CV.el.clientHeight; if(!w||!h) return; CV.ren.setSize(w,h,false); CV.cam.aspect=w/h; CV.cam.updateProjectionMatrix(); calc3DCam(CV.mode); }
+function calc3DCam(mode){ if(!CV.ok) return; CV.mode=mode; const p=camPose(mode,CV.cam.aspect||1.6,state.c); CV.cam.position.copy(p.pos); CV.ctl.target.copy(p.target); CV.cam.up.set(0,1,0); CV.ctl.update(); CV.ren.render(CV.scene,CV.cam); }
+/* every box (and pallet) position for one calculator option, front wall first */
+function calcUnits(key){
+  const k=state.calc, c=state.c, r=calcRes[key]; if(!r) return null;
+  const out=[];
+  const centreY=(rects,W)=>{ const mx=Math.max(0,...rects.map(q=>q.y+q.w)); const dy=(W-mx)/2; return rects.map(q=>({x:q.x,y:q.y+dy,l:q.l,w:q.w})); };
+  if(key==='loose'){
+    const fl=centreY(r.pat.rects(),c.W);
+    for(let i=0;i<r.layers;i++) for(const q of fl) out.push({x:q.x,y:q.y,z:i*r.h,l:q.l,w:q.w,h:r.h,shade:i%2});
+    if(r.topInfo){ const tp=centreY(r.topInfo.pat.rects(),c.W); for(let j=0;j<r.topInfo.layers;j++) for(const q of tp) out.push({x:q.x,y:q.y,z:r.layers*r.h+j*r.topInfo.h,l:q.l,w:q.w,h:r.topInfo.h,shade:(r.layers+j)%2}); }
+    out.sort((p,q)=>(p.x-q.x)||(p.z-q.z)||(p.y-q.y));
+    return {boxes:out.slice(0,r.n),pallets:[]};
+  }
+  const fl=centreY(r.floor.rects(),c.W).sort((p,q)=>(p.x-q.x)||(p.y-q.y));
+  const lay=r.pat.rects(); const ex=Math.max(...lay.map(q=>q.x+q.l)), ey=Math.max(...lay.map(q=>q.y+q.w));
+  const ox=(k.pl-ex)/2, oy=(k.pw-ey)/2;
+  const slots=[]; for(const f of fl) for(let t=0;t<r.tiers;t++) slots.push({f,t});
+  const pallets=[], boxes=[];
+  for(const {f,t} of slots.slice(0,r.pallets)){
+    const base=t*r.unitH, turned=Math.abs(f.l-k.pl)>E;
+    pallets.push({x:f.x,y:f.y,z:base,l:f.l,w:f.w,h:k.ph});
+    let n=0;
+    for(let li=0;li<r.layers&&n<r.per;li++) for(const q of lay){ if(n>=r.per) break;
+      const bx=q.x+ox, by=q.y+oy;
+      boxes.push(turned?{x:f.x+by,y:f.y+bx,z:base+k.ph+li*r.h,l:q.w,w:q.l,h:r.h,shade:li%2}:{x:f.x+bx,y:f.y+by,z:base+k.ph+li*r.h,l:q.l,w:q.w,h:r.h,shade:li%2}); n++; }
+  }
+  return {boxes,pallets};
+}
+function calc3DBuild(){
+  if(!CV.ok) return;
+  const k=state.calc, c=state.c;
+  const avail=['loose','p1','p2'].filter(x=>calcRes[x]);
+  document.querySelectorAll('[data-c3d]').forEach(b=>{ b.disabled=!calcRes[b.dataset.c3d]; b.setAttribute('aria-pressed',String(b.dataset.c3d===k.view)); });
+  if(!avail.length){ $('#c3dNote').textContent='Enter a box size to see the 3D view.'; return; }
+  document.querySelectorAll('.ccard').forEach(el=>el.classList.toggle('viewing',el.dataset.key===k.view));
+  if(!calcRes[k.view]){ k.view=avail[0]; document.querySelectorAll('[data-c3d]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c3d===k.view))); }
+  document.querySelectorAll('.ccard').forEach(el=>el.classList.toggle('viewing',el.dataset.key===k.view));
+  const u=calcUnits(k.view); const MAXI=30000;
+  if(CV.world){ CV.world.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{ if(m.map) m.map.dispose(); m.dispose(); }); } }); CV.scene.remove(CV.world); }
+  const W=new THREE.Group(); CV.world=W; CV.scene.add(W);
+  const Lm=c.L/100,Wm=c.W/100,Hm=c.H/100;
+  const P={ink:css('--ink'),muted:css('--muted'),line:css('--line'),floor:css('--floor'),accent:css('--accent')};
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(Lm,Wm),new THREE.MeshLambertMaterial({color:P.floor,side:THREE.DoubleSide})); floor.rotation.x=-Math.PI/2; W.add(floor);
+  const fw=new THREE.Mesh(new THREE.PlaneGeometry(Wm,Hm),new THREE.MeshBasicMaterial({color:P.muted,transparent:true,opacity:0.16,side:THREE.DoubleSide,depthWrite:false})); fw.rotation.y=Math.PI/2; fw.position.set(-Lm/2,Hm/2,0); W.add(fw);
+  const sw=new THREE.Mesh(new THREE.PlaneGeometry(Lm,Hm),new THREE.MeshBasicMaterial({color:P.muted,transparent:true,opacity:0.07,side:THREE.DoubleSide,depthWrite:false})); sw.position.set(0,Hm/2,-Wm/2); W.add(sw);
+  const bx=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(Lm,Hm,Wm)),new THREE.LineBasicMaterial({color:P.ink,transparent:true,opacity:0.55})); bx.position.set(0,Hm/2,0); W.add(bx);
+  const lh=Math.max(0.22,Lm/40);
+  const t1=textSprite('FRONT WALL',P.muted,lh); t1.position.set(-Lm/2,Hm+lh*0.9,0); W.add(t1);
+  const t2=textSprite('DOORS',P.accent,lh); t2.position.set(Lm/2,Hm+lh*0.9,0); W.add(t2);
+  const unit=new THREE.BoxGeometry(1,1,1), m4=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3(), ps=new THREE.Vector3();
+  const addSet=(list,colA,colB,gap)=>{ if(!list.length) return; const n=Math.min(list.length,MAXI);
+    const im=new THREE.InstancedMesh(unit,new THREE.MeshLambertMaterial({color:0xffffff}),n); im.frustumCulled=false;
+    const A=new THREE.Color(colA), B=new THREE.Color(colB);
+    for(let i=0;i<n;i++){ const b=list[i]; ps.set((b.x+b.l/2)/100-Lm/2,(b.z+b.h/2)/100,(b.y+b.w/2)/100-Wm/2); sc.set(Math.max(0.005,b.l/100-gap),Math.max(0.005,b.h/100-gap),Math.max(0.005,b.w/100-gap)); m4.compose(ps,q,sc); im.setMatrixAt(i,m4); im.setColorAt(i,b.shade?B:A); }
+    W.add(im); };
+  const boxCol=COLORS[0], boxCol2='#'+[1,3,5].map(i=>{ const v=parseInt(boxCol.slice(i,i+2),16); return Math.round(v+(255-v)*0.3).toString(16).padStart(2,'0'); }).join('');
+  addSet(u.boxes,boxCol,boxCol2,0.008);
+  addSet(u.pallets.map(p=>Object.assign({shade:0},p)),'#c99a5b','#c99a5b',0.01);
+  const r=calcRes[k.view];
+  $('#c3dNote').textContent=(k.view==='loose'?`${r.n.toLocaleString('en-US')} loose boxes`:`${r.pallets} pallets × ${r.per} boxes = ${r.n.toLocaleString('en-US')} boxes`)+(u.boxes.length>MAXI?` · showing the first ${MAXI.toLocaleString('en-US')} boxes`:'')+' · light and dark blue mark alternate layers';
+  if(!CV.sized){ CV.sized=true; calc3DSize(); } else calc3DCam(CV.mode);
+}
+function openCalc(){ if(!state.calc) state.calc=Object.assign({},CALC_DEF); fillCalcInputs(); renderUnits(); renderCalc(); $('#calcSheet').hidden=false; document.body.style.overflow='hidden'; calc3DInit(); calc3DBuild(); requestAnimationFrame(()=>calc3DSize()); $('#bxL').focus(); }
 function closeCalc(){ $('#calcSheet').hidden=true; document.body.style.overflow=''; $('#openCalc').focus(); }
 $('#openCalc').onclick=openCalc; $('#calcClose').onclick=closeCalc;
 $('#calcSheet').addEventListener('click',e=>{ if(e.target===$('#calcSheet')) closeCalc(); });
@@ -1414,6 +1520,9 @@ let calcT=null;
 $('#calcSheet').addEventListener('input',e=>{ if(e.target.id==='plType') return; if(e.target.id&&/^(pl[LWH]|plKg)$/.test(e.target.id)){ state.calc.pt='CUSTOM'; $('#plType').value='CUSTOM'; } readCalc(); clearTimeout(calcT); calcT=setTimeout(renderCalc,120); });
 $('#plType').addEventListener('change',e=>{ const k=state.calc, p=PALLETS[e.target.value]; k.pt=e.target.value; if(p&&p.L){ k.pl=p.L; k.pw=p.W; k.ph=p.H; k.pkg=p.kg; } fillCalcInputs(); renderCalc(); });
 $('#calcSheet').addEventListener('click',e=>{
+  const vb=e.target.closest('[data-c3d]'); if(vb&&!vb.disabled){ state.calc.view=vb.dataset.c3d; calc3DBuild(); return; }
+  const cb=e.target.closest('[data-ccam]'); if(cb){ calc3DCam(cb.dataset.ccam); return; }
+  const cc=e.target.closest('.ccard'); if(cc&&!e.target.closest('button')&&cc.dataset.key&&calcRes[cc.dataset.key]){ state.calc.view=cc.dataset.key; calc3DBuild(); $('#c3dWrap').scrollIntoView({behavior:'smooth',block:'nearest'}); return; }
   const rb=e.target.closest('[data-bxrot]'); if(rb){ state.calc.rot=rb.dataset.bxrot; fillCalcInputs(); renderCalc(); return; }
   const ab=e.target.closest('[data-calcadd]'); if(!ab) return;
   const k=state.calc, key=ab.dataset.calcadd, r=calcRes[key]; if(!r) return;
