@@ -1,0 +1,1404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Container Load Planner</title>
+<meta name="description" content="Plan export container loads: fit, weight balance, 3D load plan, loading steps and PDF.">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Load Planner">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: phone = one pane with bottom tabs; tablet = setup rail + tabbed workspace; laptop = setup | 3D plan + steps | results. Bright, light-only theme. */
+:root{
+  --bg:#f1f5fa; --surface:#ffffff; --sunk:#f6f9fc; --ink:#0f2238; --muted:#566b81; --line:#d6e0eb; --floor:#e7edf4;
+  --accent:#0a6cf5; --accent-ink:#ffffff; --accent-soft:#e3eeff;
+  --signal:#ffb000; --signal-soft:#fff3d3;
+  --ok:#0e9a55; --ok-soft:#e0f5e9; --warn:#b06900; --warn-soft:#fff1d6; --bad:#d9322a; --bad-soft:#ffe4e1;
+  --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
+  --body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+  --hdr:64px; --tabbar:0px;
+  color-scheme:light;
+}
+html{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+body{margin:0}
+img{max-width:100%}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{background:var(--bg)}
+body{color:var(--ink);font-family:var(--body);font-size:14px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:30;background:var(--surface)}
+h1,h2,h3{font-family:var(--display);font-weight:600;letter-spacing:.02em;margin:0;text-wrap:balance}
+h2{font-size:15px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:600}
+.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+button{font:inherit}
+input:focus-visible,select:focus-visible,button:focus-visible,summary:focus-visible,label.btn:focus-within{outline:2px solid var(--accent);outline-offset:2px}
+
+/* ---- app bar ---- */
+.appbar{position:sticky;top:env(safe-area-inset-top,0px);z-index:25;background:var(--surface);border-bottom:4px solid var(--signal);box-shadow:0 1px 0 var(--line)}
+.appbar .in{max-width:1680px;margin:0 auto;padding-block:10px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}
+.brand{display:flex;align-items:center;gap:10px;min-width:0;flex:1 1 auto}
+.mark{width:34px;height:24px;border-radius:3px;background:repeating-linear-gradient(90deg,var(--accent) 0 4px,#3b8bff 4px 6px);flex:none;box-shadow:inset 0 0 0 2px #0753c2}
+.brand h1{font-size:22px;line-height:1.05;white-space:nowrap}
+.brand .sub{font-size:12px;color:var(--muted)}
+.sum{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;max-width:100%}
+.sum::-webkit-scrollbar{display:none}
+.sumchip{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--sunk);border-radius:99px;padding:4px 10px;font-size:12px;white-space:nowrap;cursor:pointer;color:var(--ink)}
+.sumchip b{font:500 13px var(--mono);font-variant-numeric:tabular-nums}
+.sumchip.ok{background:var(--ok-soft);border-color:transparent;color:var(--ok)}
+.sumchip.warn{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.sumchip.bad{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:99px;overflow:hidden;background:var(--sunk);flex:none}
+.seg button{border:0;background:transparent;color:var(--ink);padding:6px 12px;font:500 12px var(--body);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink)}
+
+/* ---- workspace ---- */
+.app{max-width:1680px;margin:0 auto;padding-block:14px calc(var(--tabbar) + 28px);padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.pane{display:none;flex-direction:column;gap:14px;min-width:0}
+.pane.active{display:flex}
+.tabbar{display:flex;gap:4px}
+.tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;border:0;background:transparent;color:var(--muted);padding:6px 4px;border-radius:10px;font:500 11px var(--body);cursor:pointer;position:relative}
+.tab svg{width:22px;height:22px}
+.tab[aria-selected="true"]{color:var(--accent);background:var(--accent-soft)}
+.tab .badge{position:absolute;top:2px;right:calc(50% - 22px);min-width:16px;height:16px;border-radius:8px;background:var(--bad);color:#fff;font:600 10px/16px var(--body);padding:0 4px}
+.tab .badge.warn{background:var(--warn)}
+/* phone */
+@media (max-width:759px){
+  :root{--tabbar:64px}
+  .tabbar{position:fixed;left:0;right:0;bottom:0;z-index:25;background:var(--surface);border-top:1px solid var(--line);box-shadow:0 -4px 16px rgba(15,34,56,.06);padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
+  .brand .sub{display:none}
+  .brand h1{font-size:19px;white-space:normal}
+  .brand{flex:1 1 0}
+  .appbar .in{gap:8px 10px}
+  .sum{order:3;flex:1 1 100%}
+}
+/* tablet */
+@media (min-width:760px) and (max-width:1279px){
+  .app{display:grid;grid-template-columns:minmax(300px,360px) minmax(0,1fr);grid-template-areas:"setup tabs" "setup main";gap:14px 16px;align-items:start}
+  .pane.setup{grid-area:setup;display:flex;position:sticky;top:calc(var(--hdr) + 14px);max-height:calc(100dvh - var(--hdr) - 28px);overflow:auto;padding-bottom:4px;overscroll-behavior:contain}
+  .pane.plan,.pane.psteps,.pane.report{grid-area:main}
+  .tabbar{grid-area:tabs;position:sticky;top:calc(var(--hdr) + 14px);z-index:5;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:4px}
+  .tab{flex-direction:row;justify-content:center;gap:8px;font-size:13px;padding:8px}
+  .tab svg{width:18px;height:18px}
+  .tab .badge{position:static}
+  .tab[data-tab="setup"]{display:none}
+}
+/* laptop */
+@media (min-width:1280px){
+  .app{display:grid;grid-template-columns:minmax(320px,370px) minmax(0,1fr) minmax(330px,390px);grid-template-areas:"setup plan report" "setup steps report";gap:16px;align-items:start}
+  .pane{display:flex}
+  .pane.setup{grid-area:setup;position:sticky;top:calc(var(--hdr) + 14px);max-height:calc(100dvh - var(--hdr) - 28px);overflow:auto;overscroll-behavior:contain}
+  .pane.plan{grid-area:plan} .pane.psteps{grid-area:steps}
+  .pane.report{grid-area:report;position:sticky;top:calc(var(--hdr) + 14px);max-height:calc(100dvh - var(--hdr) - 28px);overflow:auto;overscroll-behavior:contain}
+  .tabbar{display:none}
+}
+
+/* ---- panels & controls ---- */
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;display:flex;flex-direction:column;gap:14px;min-width:0;box-shadow:0 1px 2px rgba(15,34,56,.04)}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.row.between{justify-content:space-between}
+label.f,.f{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted);min-width:0}
+input,select{font:400 15px var(--body);color:var(--ink);background:var(--sunk);border:1px solid var(--line);border-radius:8px;padding:8px 9px;width:100%;min-width:0;min-height:38px}
+input[type=number]{font-family:var(--mono);font-variant-numeric:tabular-nums}
+input:focus{border-color:var(--accent);background:var(--surface)}
+input:disabled{opacity:.5}
+input[readonly]{background:transparent;border-style:dashed;color:var(--ink);-webkit-text-fill-color:var(--ink);opacity:1}
+.fields{display:grid;gap:10px;grid-template-columns:repeat(3,minmax(0,1fr))}
+.fields.two{grid-template-columns:repeat(2,minmax(0,1fr))}
+.btn{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:8px;padding:9px 14px;font:500 13px var(--body);cursor:pointer;white-space:nowrap;min-height:38px;display:inline-flex;align-items:center;justify-content:center;gap:6px}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.btn.primary:hover{background:#0758cc;color:#fff}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted)}
+.btn.danger{color:var(--bad)}
+.btn:disabled{opacity:.45;cursor:not-allowed}
+.plate{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:2px 14px;border:2px solid var(--ink);border-radius:6px;padding:8px 10px;font-family:var(--display);letter-spacing:.06em;text-transform:uppercase;font-size:13px;background:var(--sunk)}
+.plate b{font-family:var(--mono);font-weight:500;letter-spacing:0;text-transform:none;text-align:right}
+.plate div{display:flex;justify-content:space-between;gap:8px}
+.check{display:flex;gap:10px;align-items:flex-start;font-size:13px}
+.check input{width:20px;height:20px;min-height:0;flex:none;accent-color:var(--accent);margin-top:1px}
+.sw{width:14px;height:14px;border-radius:4px;flex:none;display:inline-block}
+.chip{display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:3px 10px;border-radius:99px;background:var(--signal-soft);color:var(--warn);font-weight:500}
+.hint{font-size:12px;color:var(--muted)}
+
+/* ---- cargo cards ---- */
+.items{display:flex;flex-direction:column;gap:8px}
+.item{border:1px solid var(--line);border-radius:10px;background:var(--surface);overflow:hidden;transition:border-color .15s,box-shadow .15s}
+.item.open{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.ihead{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;gap:4px 10px;align-items:center;width:100%;border:0;background:transparent;color:var(--ink);padding:10px 12px;text-align:left;cursor:pointer;min-height:52px}
+.ihead .sw{width:18px;height:18px;grid-row:span 2}
+.iname{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.isum{grid-column:2;font:12px var(--mono);color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ist{grid-row:1/span 2;grid-column:3;font:600 11px var(--body);padding:3px 8px;border-radius:99px;white-space:nowrap}
+.ist.ok{background:var(--ok-soft);color:var(--ok)} .ist.bad{background:var(--bad-soft);color:var(--bad)}
+.chev{grid-row:1/span 2;grid-column:4;color:var(--muted);transition:transform .15s;font-size:14px}
+.item.open .chev{transform:rotate(180deg)}
+.ibody{padding:4px 12px 12px;display:flex;flex-direction:column;gap:12px;border-top:1px solid var(--line);padding-top:12px}
+.qty{display:flex;align-items:stretch}
+.qty input{border-radius:0;text-align:center;border-left:0;border-right:0}
+.qty button{width:38px;flex:none;border:1px solid var(--line);background:var(--accent-soft);color:var(--accent);font:600 18px var(--body);cursor:pointer}
+.qty button:first-child{border-radius:8px 0 0 8px} .qty button:last-child{border-radius:0 8px 8px 0}
+.optrow{display:flex;flex-direction:column;gap:5px;font-size:12px;color:var(--muted)}
+.opts{display:flex;flex-wrap:wrap;gap:6px}
+.opt{border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:99px;padding:7px 12px;font:500 13px var(--body);cursor:pointer;min-height:36px}
+.opt[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ifoot{display:flex;gap:8px;justify-content:flex-end}
+
+/* ---- results ---- */
+.warns{display:flex;flex-direction:column;gap:6px;list-style:none;margin:0;padding:0}
+.warns li{display:flex;gap:10px;align-items:flex-start;padding:9px 11px;border-radius:8px;font-size:13px}
+.warns .pill{font:600 11px var(--display);letter-spacing:.08em;text-transform:uppercase;padding:2px 7px;border-radius:4px;flex:none;margin-top:1px;color:#fff}
+.w-bad{background:var(--bad-soft)} .w-bad .pill{background:var(--bad)}
+.w-warn{background:var(--warn-soft)} .w-warn .pill{background:var(--warn)}
+.w-ok{background:var(--ok-soft)} .w-ok .pill{background:var(--ok)}
+.w-info{background:var(--accent-soft)} .w-info .pill{background:var(--accent)}
+.stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.stat{border-radius:10px;padding:11px 12px;display:flex;flex-direction:column;gap:4px;background:var(--sunk);border:1px solid var(--line)}
+.stat .k{font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.stat .v{font:500 22px var(--mono);font-variant-numeric:tabular-nums;line-height:1.15}
+.stat .s{font-size:12px;color:var(--muted)}
+.bar{height:8px;border-radius:4px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--accent);border-radius:4px}
+.bar i.hi{background:var(--signal)} .bar i.over{background:var(--bad)}
+.view{display:flex;flex-direction:column;gap:6px}
+.view .cap{display:flex;justify-content:space-between;gap:8px;font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);flex-wrap:wrap}
+.svgbox{overflow-x:auto}
+.svgbox svg{display:block;width:100%;height:auto;min-width:300px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.split{display:grid;grid-template-columns:minmax(0,1fr);gap:14px}
+.balance{display:flex;flex-direction:column;gap:6px;font-size:13px}
+.balance .track{display:flex;height:24px;border-radius:6px;overflow:hidden}
+.balance .track i{display:flex;align-items:center;justify-content:center;font:500 11px var(--mono);color:#fff}
+.balance .ends{display:flex;justify-content:space-between;color:var(--muted);font-size:12px}
+.tablebox{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:13px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:600 12px var(--display);letter-spacing:.07em;text-transform:uppercase;color:var(--muted)}
+td.r,th.r{text-align:right}
+.plans{display:flex;flex-direction:column;gap:6px;list-style:none;margin:0;padding:0}
+.plans li{display:flex;gap:8px;align-items:center;justify-content:space-between;border:1px solid var(--line);border-radius:8px;padding:8px 10px;flex-wrap:wrap}
+.plans .meta{font-size:12px;color:var(--muted)}
+.exports{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+details.how{font-size:13px}
+details.how summary{cursor:pointer;font-weight:500;color:var(--accent)}
+details.how ol{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--tabbar) + 16px + env(safe-area-inset-bottom,0px));background:var(--ink);color:#fff;padding:10px 16px;border-radius:99px;font-size:13px;z-index:40;max-width:calc(100% - 32px)}
+.busy{font-size:12px;color:var(--muted)}
+.empty{padding:20px;text-align:center;color:var(--muted);border:1px dashed var(--line);border-radius:10px}
+textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:var(--sunk);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px}
+
+/* ---- 3D viewer & steps ---- */
+.viewer{position:relative;border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--sunk)}
+.v3d{width:100%;height:clamp(300px,62vw,460px);touch-action:none;cursor:grab}
+@media (min-width:760px){.v3d{height:clamp(380px,48vw,540px)}}
+@media (min-width:1280px){.v3d{height:clamp(420px,calc(100dvh - var(--hdr) - 300px),620px)}}
+.v3d:active{cursor:grabbing}
+.v3d canvas{display:block;width:100%!important;height:100%!important}
+.vtools{position:absolute;top:10px;left:10px;display:flex;flex-wrap:wrap;gap:4px;right:10px}
+.vbtn{border:1px solid var(--line);background:rgba(255,255,255,.92);color:var(--ink);border-radius:99px;padding:6px 12px;font:500 12px var(--body);cursor:pointer;min-height:32px}
+.vbtn[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.vhint{position:absolute;bottom:8px;right:10px;left:10px;text-align:right;font-size:11px;color:var(--muted);pointer-events:none}
+.vfail{padding:24px;text-align:center;color:var(--muted)}
+.stepbar{display:flex;gap:8px;align-items:center}
+.stepbar input{flex:1;padding:0;background:transparent;border:0;accent-color:var(--accent);min-width:0;min-height:30px}
+.stepbar .btn{padding:9px 12px}
+.stepnow{border-left:5px solid var(--signal);background:var(--signal-soft);border-radius:0 10px 10px 0;padding:11px 13px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.stepnow .t{font:700 19px var(--display);letter-spacing:.03em}
+.stepnow .pos{font:12px var(--mono);color:var(--muted)}
+.inst{display:flex;flex-direction:column;gap:4px}
+.inst div{display:flex;gap:8px;align-items:baseline}
+.inst .sw{transform:translateY(2px)}
+.tag{font:600 10px var(--display);letter-spacing:.08em;text-transform:uppercase;padding:1px 6px;border-radius:4px;background:var(--warn-soft);color:var(--warn);white-space:nowrap}
+.steps{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px}
+.scard{border:1px solid var(--line);border-radius:12px;overflow:hidden;background:var(--surface);display:flex;flex-direction:column;cursor:pointer;text-align:left;padding:0;font:inherit;color:inherit;transition:transform .12s,box-shadow .12s,border-color .12s}
+.scard:hover{border-color:var(--accent);transform:translateY(-1px);box-shadow:0 6px 16px rgba(15,34,56,.08)}
+.scard[aria-current="true"]{border-color:var(--signal);box-shadow:0 0 0 3px var(--signal)}
+.scard .img{aspect-ratio:16/10;background:var(--sunk);display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:12px;max-width:100%}
+.scard .img img{width:100%;height:100%;object-fit:cover;display:block}
+.scard .body{padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:13px}
+.scard .no{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.scard .no b{font:700 20px var(--display);letter-spacing:.03em}
+.scard .no span{font:11px var(--mono);color:var(--muted)}
+/* ---- loading options ---- */
+.opts4{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,230px),1fr));gap:10px}
+@media (max-width:759px){.opts4{display:flex;overflow-x:auto;scroll-snap-type:x mandatory;padding-bottom:4px;margin-inline:-4px;padding-inline:4px}.ocard{flex:0 0 78%;scroll-snap-align:start}}
+.ocard{border:1px solid var(--line);border-radius:12px;background:var(--surface);padding:10px;display:flex;flex-direction:column;gap:8px;text-align:left;cursor:pointer;color:inherit;font:inherit;min-width:0;transition:border-color .12s,box-shadow .12s}
+.ocard:hover{border-color:var(--accent)}
+.ocard[aria-checked="true"]{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+.ocard .oh{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}
+.ocard .on{font:700 17px var(--display);letter-spacing:.03em;line-height:1.1}
+.ocard .rec{font:600 10px var(--display);letter-spacing:.08em;text-transform:uppercase;background:var(--signal);color:var(--ink);padding:2px 6px;border-radius:4px;white-space:nowrap}
+.ocard .od{font-size:12px;color:var(--muted);line-height:1.35}
+.ocard .mini{background:var(--sunk);border-radius:6px;overflow:hidden;max-width:100%}
+.ocard .mini svg{display:block;width:100%;height:auto}
+.ocard .om{display:grid;grid-template-columns:minmax(0,1fr);gap:3px;font-size:12px}
+.ocard .om span{display:flex;justify-content:space-between;gap:6px;color:var(--muted)}
+.ocard .om b{font:500 12px var(--mono);color:var(--ink);font-variant-numeric:tabular-nums}
+.ocard .om b.bad{color:var(--bad)} .ocard .om b.good{color:var(--ok)}
+.ocard .sel{font:600 12px var(--body);color:var(--accent)}
+/* ---- fill capacity ---- */
+.fcap{display:flex;flex-direction:column;gap:8px}
+.fbar{position:relative;height:26px;border-radius:6px;background:var(--floor);overflow:hidden;display:flex}
+.fbar i{display:block;height:100%}
+.fbar .mark{position:absolute;top:0;bottom:0;width:2px;background:var(--ink)}
+.flegend{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:4px 10px;font-size:13px}
+.flegend b{font:500 13px var(--mono);font-variant-numeric:tabular-nums;text-align:right}
+.flegend .k{display:flex;align-items:center;gap:7px;color:var(--muted)}
+.flegend .tot{font-weight:600;color:var(--ink)}
+.fbig{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+.fbig b{font:500 28px var(--mono);color:var(--ok)}
+.more{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.more li{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px}
+.more li span{display:flex;align-items:center;gap:8px;min-width:0}
+.more li b{font:500 13px var(--mono);white-space:nowrap}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+</head>
+<body>
+<header class="appbar" id="appbar">
+  <div class="in">
+    <div class="brand">
+      <span class="mark" aria-hidden="true"></span>
+      <div style="min-width:0">
+        <h1>Container Load Planner</h1>
+        <div class="sub">Planning estimates · check the CSC plate and carrier limits</div>
+      </div>
+    </div>
+    <div class="sum" id="sumChips" aria-label="Load summary"></div>
+    <div class="seg" role="group" aria-label="Units">
+      <button id="u-metric" type="button">Metric</button>
+      <button id="u-imperial" type="button">Imperial</button>
+    </div>
+  </div>
+</header>
+
+<main class="app" id="app">
+  <nav class="tabbar" id="tabbar" role="tablist" aria-label="Sections">
+    <button class="tab" role="tab" data-tab="setup" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="7" width="18" height="12" rx="1"/><path d="M7 7v12M11 7v12M15 7v12M3 4h18"/></svg>Setup</button>
+    <button class="tab" role="tab" data-tab="plan" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4.5v9L12 21l-8-4.5v-9z"/><path d="M12 12l8-4.5M12 12v9M12 12L4 7.5"/></svg>3D plan</button>
+    <button class="tab" role="tab" data-tab="steps" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><path d="M4 6h1M4 12h1M4 18h1"/></svg>Steps</button>
+    <button class="tab" role="tab" data-tab="report" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Results<span class="badge" id="warnBadge" hidden></span></button>
+  </nav>
+
+  <!-- SETUP -->
+  <div class="pane setup" data-pane="setup">
+    <section class="panel" aria-labelledby="h-cont">
+      <h2 id="h-cont">Container</h2>
+      <label class="f">Type
+        <select id="ctype"></select>
+      </label>
+      <div class="fields">
+        <label class="f">Inside length <span data-lu></span><input id="cL" type="number" step="any" inputmode="decimal"></label>
+        <label class="f">Inside width <span data-lu></span><input id="cW" type="number" step="any" inputmode="decimal"></label>
+        <label class="f">Inside height <span data-lu></span><input id="cH" type="number" step="any" inputmode="decimal"></label>
+        <label class="f">Door width <span data-lu></span><input id="cDW" type="number" step="any" inputmode="decimal"></label>
+        <label class="f">Door height <span data-lu></span><input id="cDH" type="number" step="any" inputmode="decimal"></label>
+        <label class="f">Max payload <span data-wu></span><input id="cP" type="number" step="any" inputmode="decimal"></label>
+      </div>
+      <div class="plate" id="plate" aria-label="Container summary"></div>
+      <label class="check"><input id="cCenter" type="checkbox"> <span>Centre a part load along the length <span class="hint">(leaves a gap at the front wall to brace)</span></span></label>
+      <div class="hint" id="dimHint"></div>
+      <div class="hint">Payloads are typical values. Use the CSC plate figure or your road weight limit, whichever is lower.</div>
+    </section>
+
+    <section class="panel" aria-labelledby="h-cargo">
+      <div class="row between">
+        <h2 id="h-cargo">Cargo</h2>
+        <span class="chip" id="exampleChip" hidden>Example cargo</span>
+      </div>
+      <div class="items" id="items"></div>
+      <div class="row">
+        <button class="btn primary" id="addItem" type="button" style="flex:1">+ Add item</button>
+        <button class="btn ghost" id="clearItems" type="button">Clear list</button>
+      </div>
+      <details class="how">
+        <summary>How to use</summary>
+        <ol>
+          <li>Pick the container. Adjust payload to the CSC plate figure.</li>
+          <li>Tap a cargo line to open it. Enter the size and weight of one unit and the quantity.</li>
+          <li>Choose <b>Stacking</b> and <b>Max load on top</b> (total weight one unit can carry; blank = no limit).</li>
+          <li>Choose <b>Rotation</b>: Fixed keeps the length along the container; Side up allows turning on the floor; Any allows tipping.</li>
+          <li>The plan updates as you type. Check Results, then follow the Steps from the front wall to the doors.</li>
+          <li>Save on this device, or download a PDF or plan file to share.</li>
+        </ol>
+      </details>
+    </section>
+  </div>
+
+  <!-- 3D PLAN -->
+  <div class="pane plan" data-pane="plan">
+    <section class="panel" aria-labelledby="h-opts">
+      <div class="row between">
+        <h2 id="h-opts">Loading options</h2>
+        <span class="hint">Tap an option to see it in 3D and in the steps</span>
+      </div>
+      <div class="opts4" id="opts4" role="radiogroup" aria-label="Loading options"></div>
+    </section>
+    <section class="panel" aria-labelledby="h-plan">
+      <div class="row between">
+        <h2 id="h-plan">3D load plan</h2>
+        <div class="legend" id="legend"></div>
+      </div>
+      <div class="viewer" id="viewer">
+        <div class="v3d" id="v3d" aria-label="3D view of the loaded container. Drag to rotate, pinch or scroll to zoom."></div>
+        <div class="vtools" role="group" aria-label="Camera">
+          <button class="vbtn" data-cam="iso" type="button" aria-pressed="true">3D</button>
+          <button class="vbtn" data-cam="top" type="button">Top</button>
+          <button class="vbtn" data-cam="side" type="button">Side</button>
+          <button class="vbtn" data-cam="doors" type="button">From doors</button>
+        </div>
+        <div class="vhint">Drag to rotate · pinch to zoom · two fingers to pan</div>
+        <div class="vfail" id="vfail" hidden>The 3D view could not load here. The top and side drawings below show the same plan.</div>
+      </div>
+      <div class="stepbar">
+        <button class="btn" id="prevStep" type="button" aria-label="Previous step">‹ Prev</button>
+        <input id="step" type="range" min="1" max="1" value="1" aria-label="Loading step">
+        <button class="btn primary" id="nextStep" type="button" aria-label="Next step">Next ›</button>
+      </div>
+      <div class="stepnow" id="stepNow" aria-live="polite"></div>
+      <details class="how" id="drawings">
+        <summary>Top and side drawings</summary>
+        <div class="view" style="margin-top:10px">
+          <div class="cap"><span>Top view</span><span>Front wall ← → Doors</span></div>
+          <div class="svgbox" id="vTop"></div>
+        </div>
+        <div class="view" style="margin-top:10px">
+          <div class="cap"><span>Side view</span><span>Seen from the left side</span></div>
+          <div class="svgbox" id="vSide"></div>
+        </div>
+      </details>
+    </section>
+  </div>
+
+  <!-- STEPS -->
+  <div class="pane psteps" data-pane="steps">
+    <section class="panel" aria-labelledby="h-seq">
+      <div class="row between">
+        <h2 id="h-seq">Loading instructions</h2>
+        <span class="hint">Front wall to doors · bottom layer first · tap a step to see it in 3D</span>
+      </div>
+      <div class="steps" id="steps"></div>
+    </section>
+  </div>
+
+  <!-- RESULTS -->
+  <div class="pane report" data-pane="report">
+    <section class="panel" aria-labelledby="h-res">
+      <div class="row between">
+        <h2 id="h-res">Load result</h2>
+        <span class="busy" id="busy" aria-live="polite"></span>
+      </div>
+      <ul class="warns" id="warns"></ul>
+      <div class="stats" id="stats"></div>
+    </section>
+    <section class="panel" aria-labelledby="h-fill">
+      <div class="row between">
+        <h2 id="h-fill">How much you can fill</h2>
+        <span class="busy" id="fillBusy"></span>
+      </div>
+      <div id="fillCap"></div>
+    </section>
+    <section class="panel" aria-labelledby="h-bal">
+      <h2 id="h-bal">Weight distribution</h2>
+      <div class="split" id="balance"></div>
+      <div class="view">
+        <div class="cap"><span>Along the length</span><span id="perLbl"></span></div>
+        <div class="svgbox" id="vDist"></div>
+      </div>
+    </section>
+    <section class="panel" aria-labelledby="h-items">
+      <h2 id="h-items">Cargo result</h2>
+      <div class="tablebox"><table id="itemTable"></table></div>
+    </section>
+    <section class="panel" aria-labelledby="h-save">
+      <h2 id="h-save">Save and export</h2>
+      <label class="f">Plan name / reference
+        <input id="planName" type="text" placeholder="e.g. Booking 4471 – Rotterdam">
+      </label>
+      <div class="exports">
+        <button class="btn primary" id="savePlan" type="button">Save on device</button>
+        <button class="btn" id="pdfBtn" type="button">Download PDF</button>
+        <button class="btn" id="copyBtn" type="button">Copy summary</button>
+        <button class="btn" id="jsonBtn" type="button">Export plan file</button>
+        <label class="btn" for="importFile" style="grid-column:1/-1">Import plan file</label>
+        <input id="importFile" type="file" accept=".json,application/json" hidden>
+      </div>
+      <div class="hint" id="exportNote"></div>
+      <div id="copyFallback"></div>
+      <ul class="plans" id="plans"></ul>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+"use strict";
+const $=s=>document.querySelector(s);
+const E=0.01;
+const COLORS=['#1f74ff','#ff8f0f','#17b26a','#ef3e67','#8b5cf6','#0fb5c4','#d99a00','#5c7491','#ff5c33','#4caf2e','#d146c4','#16a093'];
+const OLD_COLORS=['#2f6f9f','#c47f1f','#3f8a57','#a8455a','#6b58a8','#25838a','#8d6a37','#56677a','#c2562f','#4b7f2a','#9a4a9a','#357a6b'];
+const PRESETS={
+  '20GP':{label:"20' Standard (20GP)",L:589.8,W:235.2,H:239.3,doorW:234,doorH:228,payload:28200},
+  '40GP':{label:"40' Standard (40GP)",L:1203.2,W:235.2,H:239.3,doorW:234,doorH:228,payload:26700},
+  '40HC':{label:"40' High Cube (40HC)",L:1203.2,W:235.2,H:269.8,doorW:234,doorH:258.5,payload:26500},
+  '45HC':{label:"45' High Cube (45HC)",L:1355.6,W:235.2,H:269.8,doorW:234,doorH:258.5,payload:27600},
+  'CUSTOM':{label:'Custom dimensions'}
+};
+const EXAMPLE=[
+  {name:'EUR pallet – cartons',l:120,w:80,h:115,kg:480,qty:22,stack:true,maxTop:500,rot:'floor'},
+  {name:'Machine crate',l:180,w:110,h:140,kg:1450,qty:2,stack:false,maxTop:0,rot:'fixed'},
+  {name:'Spare parts carton',l:60,w:40,h:40,kg:18,qty:30,stack:true,maxTop:120,rot:'any'}
+];
+let uid=1;
+const mkItem=(o,i)=>Object.assign({id:'i'+(uid++),name:'',l:0,w:0,h:0,kg:0,qty:1,stack:true,maxTop:0,rot:'floor',color:COLORS[(i||0)%COLORS.length]},o);
+
+function store(k,v){try{localStorage.setItem(k,JSON.stringify(v))}catch(e){}}
+function fetchStore(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null}catch(e){return null}}
+
+let state=fetchStore('clp.draft');
+if(!state||!state.c||!Array.isArray(state.items)){
+  state={units:'metric',planName:'',ctype:'40GP',c:Object.assign({},PRESETS['40GP']),items:EXAMPLE.map(mkItem),example:true};
+}else{
+  state.items.forEach(it=>{const n=parseInt(String(it.id).slice(1));if(n>=uid)uid=n+1; const oi=OLD_COLORS.indexOf(it.color); if(oi>=0) it.color=COLORS[oi];});
+}
+
+/* ---------- units ---------- */
+const M=()=>state.units==='metric';
+const lenOut=cm=>M()?cm:cm/2.54;
+const lenIn=v=>M()?v:v*2.54;
+const wtOut=kg=>M()?kg:kg*2.20462;
+const wtIn=v=>M()?v:v/2.20462;
+const LU=()=>M()?'cm':'in';
+const WU=()=>M()?'kg':'lb';
+const r1=v=>Math.round(v*10)/10;
+function fmtPos(cm){ if(M()) return (cm/100).toFixed(2)+' m'; const inch=Math.round(cm/2.54); return Math.floor(inch/12)+"' "+(inch%12)+'"'; }
+function fmtW(kg){ return Math.round(wtOut(kg)).toLocaleString('en-US')+' '+WU(); }
+function fmtVol(cm3){ return M()? (cm3/1e6).toFixed(1)+' cbm' : Math.round(cm3/28316.85).toLocaleString('en-US')+' ft³'; }
+function fmtVolA(cm3){ return M()? (cm3/1e6).toFixed(1)+' cbm' : Math.round(cm3/28316.85)+' ft3'; }
+function fmtDim(it){ return [it.l,it.w,it.h].map(v=>r1(lenOut(v))).join(' × ')+' '+LU(); }
+const num=v=>{const n=parseFloat(v);return isFinite(n)?n:0};
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+/* ---------- packing engine ---------- */
+function validItem(it){return it.l>0&&it.w>0&&it.h>0&&it.kg>=0&&it.qty>0}
+function orientations(it,c){
+  const {l,w,h}=it; let o=[[l,w,h]];
+  if(it.rot!=='fixed') o.push([w,l,h]);
+  if(it.rot==='any') o.push([l,h,w],[h,l,w],[w,h,l],[h,w,l]);
+  const seen=new Set(); const all=o.filter(a=>{const k=a.join('x');if(seen.has(k))return false;seen.add(k);return true});
+  const inBox=all.filter(([a,b,d])=>a<=c.L+E&&b<=c.W+E&&d<=c.H+E);
+  const thruDoor=inBox.filter(([a,b,d])=>b<=c.doorW+E&&d<=c.doorH+E);
+  return {all:thruDoor,why: inBox.length===0?'size':(thruDoor.length===0?'door':null)};
+}
+const STRATS={
+  heavy:{name:'Heavy first',desc:'Heaviest units at the front wall and on the bottom. Safest for stacking.',order:'weight'},
+  fill:{name:'Maximum fill',desc:'Tries several packing orders (largest, longest, widest base first) and keeps the one that loads the most volume.',order:'multi'},
+  list:{name:'Your list order',desc:'Loads items in the order of your cargo list, first line at the front wall. Good for grouped or multi-drop loads.',order:'list'},
+  balance:{name:'Balanced weight',desc:'Heavy-first rows re-ordered and moved so the weight centre sits near mid-length. May leave a gap at the front wall to brace.',order:'weight',balance:true}
+};
+const STRAT_KEYS=['heavy','fill','list','balance'];
+STRAT_KEYS.forEach(k=>STRATS[k].key=k);
+function bestOrientFirst(all,c,stack){
+  const dens=o=>Math.floor((c.W+E)/o[1])*(stack?Math.max(1,Math.floor((c.H+E)/o[2])):1)/o[0];
+  return all.slice().sort((a,b)=>dens(b)-dens(a));
+}
+/* ---- placement core: memoised, with a spatial index along the length ---- */
+const coreCache=new Map();
+function coreKey(c,items,order,extra){
+  const it=items.filter(validItem).map(i=>[i.id,i.l,i.w,i.h,i.kg,i.qty,i.stack?1:0,i.maxTop||0,i.rot].join(',')).join(';');
+  return [c.L,c.W,c.H,c.doorW,c.doorH,c.payload,order,it,extra?[extra.item.l,extra.item.w,extra.item.h,extra.item.kg,extra.item.stack?1:0,extra.item.maxTop||0,extra.item.rot,extra.qty].join(','):''].join('|');
+}
+function packCore(c,items,order,extra){
+  const key=coreKey(c,items,order,extra);
+  if(coreCache.has(key)){ const v=coreCache.get(key); coreCache.delete(key); coreCache.set(key,v); return v; }
+  const L=c.L,W=c.W,H=c.H;
+  const valid=items.filter(validItem);
+  const MAXU=3000;
+  let units=[]; valid.forEach((it,i)=>{for(let k=0;k<it.qty;k++)units.push({it,ord:i})});
+  let capped=0; if(units.length>MAXU){capped=units.length-MAXU;}
+  const vol=it=>it.l*it.w*it.h;
+  if(order==='volume') units.sort((a,b)=>(vol(b.it)-vol(a.it))||(b.it.kg-a.it.kg)||(a.ord-b.ord));
+  else if(order==='list') units.sort((a,b)=>(a.ord-b.ord));
+  else if(order==='length') units.sort((a,b)=>(Math.max(b.it.l,b.it.w,b.it.h)-Math.max(a.it.l,a.it.w,a.it.h))||(vol(b.it)-vol(a.it))||(a.ord-b.ord));
+  else if(order==='area') units.sort((a,b)=>(b.it.l*b.it.w-a.it.l*a.it.w)||(vol(b.it)-vol(a.it))||(a.ord-b.ord));
+  else units.sort((a,b)=>(b.it.kg-a.it.kg)||(vol(b.it)-vol(a.it))||(a.ord-b.ord));
+  const overflow=units.slice(MAXU); units=units.slice(0,MAXU);
+  const xItem=extra?Object.assign({},extra.item,{id:extra.item.id+'+more'}):null;
+  if(xItem){ for(let k=0;k<extra.qty;k++) units.push({it:xItem,ord:1e9}); }
+  const boxes=[];
+  /* spatial index: boxes bucketed by 40 cm slices of the length */
+  const BS=40, NB=Math.ceil(L/BS)+2, buckets=Array.from({length:NB},()=>[]);
+  let stamp=0;
+  const bi=x=>Math.max(0,Math.min(NB-1,Math.floor(x/BS)));
+  const near=(x0,x1)=>{ stamp++; const out=[]; for(let i=bi(x0-E);i<=bi(x1+E);i++){ for(const b of buckets[i]){ if(b._s!==stamp){ b._s=stamp; out.push(b); } } } return out; };
+  /* extreme points kept sorted by (x, z, y) */
+  const eps=[]; const epSet=new Set(); let epId=0;
+  const cmp=(a,b)=>(a.x-b.x)||(a.z-b.z)||(a.y-b.y);
+  const epk=(x,y,z)=>Math.round(x*10)+'|'+Math.round(y*10)+'|'+Math.round(z*10);
+  function addEP(x,y,z){ if(x>=L-E||y>=W-E||z>=H-E) return; const k=epk(x,y,z); if(epSet.has(k)) return; epSet.add(k);
+    const p={x,y,z,id:epId++}; let lo=0,hi=eps.length; while(lo<hi){ const m=(lo+hi)>>1; if(cmp(eps[m],p)<0) lo=m+1; else hi=m; } eps.splice(lo,0,p); }
+  addEP(0,0,0);
+  const fail=new Map(); const deadType=new Set(); const oriCache=new Map();
+  const left=new Map(); const addLeft=(it,why)=>{const k=it.id+'|'+why;const e=left.get(k)||{it,why,n:0};e.n++;left.set(k,e)};
+  overflow.forEach(u=>addLeft(u.it,'cap'));
+  let total=0;
+  function canPlace(x,y,z,l,w,h,kg){
+    if(x+l>L+E||y+w>W+E||z+h>H+E) return null;
+    const nb=near(x,x+l);
+    for(const b of nb){ if(x<b.x+b.l-E&&x+l>b.x+E&&y<b.y+b.w-E&&y+w>b.y+E&&z<b.z+b.h-E&&z+h>b.z+E) return null; }
+    if(z<=E) return [];
+    let sup=[],area=0;
+    for(const b of nb){
+      if(Math.abs(b.z+b.h-z)<E){
+        const ox=Math.min(x+l,b.x+b.l)-Math.max(x,b.x), oy=Math.min(y+w,b.y+b.w)-Math.max(y,b.y);
+        if(ox>E&&oy>E){ if(!b.it.stack) return null; sup.push({b,a:ox*oy}); area+=ox*oy; }
+      }
+    }
+    if(area<l*w*0.97) return null;
+    sup=sup.map(s=>({b:s.b,share:s.a/area}));
+    const inc=new Map();
+    const add=(b,wt)=>{inc.set(b,(inc.get(b)||0)+wt); for(const s of b.sup) add(s.b,wt*s.share);};
+    for(const s of sup) add(s.b,kg*s.share);
+    for(const [b,v] of inc){ if(!b.it.stack) return null; if(b.it.maxTop>0&&b.load+v>b.it.maxTop+E) return null; }
+    return sup;
+  }
+  function projY(x,y,z){ let best=0; for(const b of near(x,x)) if(b.x<=x+E&&x<b.x+b.l-E&&b.z<=z+E&&z<b.z+b.h-E&&b.y+b.w<=y+E) best=Math.max(best,b.y+b.w); return best; }
+  function projZ(x,y,z){ let best=0; for(const b of near(x,x)) if(b.x<=x+E&&x<b.x+b.l-E&&b.y<=y+E&&y<b.y+b.w-E&&b.z+b.h<=z+E) best=Math.max(best,b.z+b.h); return best; }
+  function projX(x,y,z){ let best=0; for(const b of near(0,x)) if(b.y<=y+E&&y<b.y+b.w-E&&b.z<=z+E&&z<b.z+b.h-E&&b.x+b.l<=x+E) best=Math.max(best,b.x+b.l); return best; }
+  for(const u of units){
+    const it=u.it;
+    if(!oriCache.has(it.id)){ const o=orientations(it,c); o.all=bestOrientFirst(o.all,c,it.stack); o.minL=o.all.length?Math.min(...o.all.map(q=>q[0])):0; oriCache.set(it.id,o); fail.set(it.id,new Set()); }
+    const oc=oriCache.get(it.id), fc=fail.get(it.id);
+    if(oc.why){addLeft(it,oc.why);continue;}
+    if(total+it.kg>c.payload+E){addLeft(it,'payload');continue;}
+    if(deadType.has(it.id)){addLeft(it,'space');continue;}
+    /* best fit: the position and orientation that ends closest to the front wall, then lowest, then leftmost */
+    let placed=null;
+    for(const p of eps){
+      if(placed&&p.x+oc.minL>placed.end+E) break;
+      for(let oi=0;oi<oc.all.length;oi++){
+        const [l,w,h]=oc.all[oi]; const end=p.x+l;
+        if(placed&&(end>placed.end+E||(Math.abs(end-placed.end)<=E&&(p.z>placed.z+E||(Math.abs(p.z-placed.z)<=E&&p.y>=placed.y-E))))) continue;
+        const fk=p.id*8+oi;
+        if(fc.has(fk)) continue;
+        const sup=canPlace(p.x,p.y,p.z,l,w,h,it.kg);
+        if(sup) placed={x:p.x,y:p.y,z:p.z,l,w,h,sup,end};
+        else fc.add(fk);
+      }
+    }
+    if(!placed){deadType.add(it.id);addLeft(it,'space');continue;}
+    const b={it,x:placed.x,y:placed.y,z:placed.z,l:placed.l,w:placed.w,h:placed.h,kg:it.kg,sup:placed.sup,load:0,_s:0};
+    const addLoad=(bb,wt)=>{bb.load+=wt; for(const s of bb.sup) addLoad(s.b,wt*s.share);};
+    for(const s of b.sup) addLoad(s.b,b.kg*s.share);
+    boxes.push(b); total+=it.kg;
+    for(let i=bi(b.x);i<=bi(b.x+b.l-E);i++) buckets[i].push(b);
+    for(let i=eps.length-1;i>=0;i--){ const p=eps[i]; if(p.x>=b.x-E&&p.x<b.x+b.l-E&&p.y>=b.y-E&&p.y<b.y+b.w-E&&p.z>=b.z-E&&p.z<b.z+b.h-E) eps.splice(i,1); }
+    const cands=[[b.x+b.l,b.y,b.z],[b.x,b.y+b.w,b.z],[b.x,b.y,b.z+b.h]];
+    for(const [x,y,z] of cands){
+      addEP(x,y,z); addEP(x,projY(x,y,z),z); addEP(projX(x,y,z),y,z);
+      if(z>E) addEP(x,y,projZ(x,y,z));
+    }
+  }
+  const res={boxes,left:[...left.values()],total,capped,validCount:valid.length,xItem};
+  coreCache.set(key,res); if(coreCache.size>80) coreCache.delete(coreCache.keys().next().value);
+  return res;
+}
+function pack(c,items,opt){
+  opt=opt||STRATS.heavy;
+  const L=c.L,W=c.W;
+  let core;
+  if(opt.order==='multi'){
+    let best=null;
+    for(const ord of ['weight','list','volume','length','area']){
+      const r=packCore(c,items,ord,opt.extra);
+      const v=r.boxes.reduce((s,b)=>s+b.l*b.w*b.h,0);
+      if(!best||v>best.v+1||(Math.abs(v-best.v)<=1&&r.boxes.length>best.r.boxes.length)) best={r,v};
+    }
+    core=best.r;
+  } else core=packCore(c,items,opt.order,opt.extra);
+  /* work on copies so cached placements stay untouched */
+  const boxes=core.boxes.map(b=>({it:b.it,x:b.x,y:b.y,z:b.z,l:b.l,w:b.w,h:b.h,kg:b.kg,load:b.load}));
+  const total=core.total;
+  /* loading sequence: rows from front wall, bottom layer first */
+  const sorted=boxes.slice().sort((a,b)=>(a.x-b.x)||(a.z-b.z)||(a.y-b.y));
+  const rows=[]; let cur=null;
+  for(const b of sorted){
+    if(!cur||b.x>=cur.end-E){cur={start:b.x,end:b.x+b.l,boxes:[]};rows.push(cur);}
+    cur.boxes.push(b); cur.end=Math.max(cur.end,b.x+b.l);
+  }
+  /* balanced option: re-order whole rows (each row is a free-standing slab) to bring the weight centre to mid-length */
+  if(opt.balance&&rows.length>1){
+    rows.forEach(r=>{ r.len=r.end-r.start; r.kg=r.boxes.reduce((s,b)=>s+b.kg,0); r.mom=r.boxes.reduce((s,b)=>s+b.kg*(b.x+b.l/2-r.start),0); });
+    const total=rows.reduce((s,r)=>s+r.kg,0)||1, used=rows.reduce((s,r)=>s+r.len,0);
+    const off=0, target=L/2;
+    const cost=ord=>{ let x=off,m=0; for(const r of ord){ m+=r.mom+r.kg*x; x+=r.len; } return Math.abs(m/total-target); };
+    let ord=rows.slice(), best=cost(ord), improved=true, guard=0;
+    while(improved&&guard++<60){ improved=false;
+      for(let i=0;i<ord.length;i++) for(let j=i+1;j<ord.length;j++){ const t=ord.slice(); [t[i],t[j]]=[t[j],t[i]]; const cst=cost(t); if(cst<best-1e-6){ best=cst; ord=t; improved=true; } } }
+    let x=0; for(const r of ord){ const dx=x-r.start; r.boxes.forEach(b=>b.x+=dx); r.start+=dx; r.end+=dx; x=r.end; }
+    rows.length=0; ord.forEach(r=>rows.push(r));
+    /* then slide the whole block toward the doors until the weight centre is at mid-length (as far as the free floor allows) */
+    const cog=boxes.reduce((s,b)=>s+b.kg*(b.x+b.l/2),0)/total;
+    const shift=Math.max(0,Math.min(L-x,target-cog));
+    if(shift>E){ boxes.forEach(b=>b.x+=shift); rows.forEach(r=>{r.start+=shift;r.end+=shift;}); }
+  }
+  /* centre each row across the width so left/right stays balanced; optionally centre the block along the length */
+  rows.forEach(r=>{ const mn=Math.min(...r.boxes.map(b=>b.y)), mx=Math.max(...r.boxes.map(b=>b.y+b.w)); const dy=(W-(mx-mn))/2-mn; r.boxes.forEach(b=>b.y+=dy); });
+  if(c.centerLen&&!opt.balance&&boxes.length){ const mxX=Math.max(...boxes.map(b=>b.x+b.l)); const dx=(L-mxX)/2; if(dx>E){ boxes.forEach(b=>b.x+=dx); rows.forEach(r=>{r.start+=dx;r.end+=dx;}); } }
+  let seq=0;
+  rows.forEach(r=>{ r.boxes.sort((a,b)=>(a.z-b.z)||(a.y-b.y)||(a.x-b.x)); r.boxes.forEach(b=>b.seq=++seq); });
+  return {c,boxes,rows,left:core.left,total,capped:core.capped,validCount:core.validCount,key:opt.key,xItem:core.xItem};
+}
+
+/* ---------- analysis ---------- */
+function analyse(r){
+  const c=r.c, vol=c.L*c.W*c.H;
+  let used=0,mx=0,my=0,mz=0,front=0,leftSide=0,maxX=0,maxZ=0;
+  for(const b of r.boxes){
+    used+=b.l*b.w*b.h; const cx=b.x+b.l/2, cy=b.y+b.w/2, cz=b.z+b.h/2;
+    mx+=b.kg*cx; my+=b.kg*cy; mz+=b.kg*cz;
+    const half=c.L/2; const fpart=Math.max(0,Math.min(b.x+b.l,half)-b.x)/b.l; front+=b.kg*fpart;
+    const hw=c.W/2; const lpart=Math.max(0,Math.min(b.y+b.w,hw)-b.y)/b.w; leftSide+=b.kg*lpart;
+    maxX=Math.max(maxX,b.x+b.l); maxZ=Math.max(maxZ,b.z+b.h);
+  }
+  const t=r.total||1;
+  const binLen=M()?100:60.96;
+  const nb=Math.ceil(c.L/binLen); const bins=new Array(nb).fill(0);
+  for(const b of r.boxes){ for(let i=0;i<nb;i++){ const s=i*binLen,e=Math.min(c.L,s+binLen); const ov=Math.min(e,b.x+b.l)-Math.max(s,b.x); if(ov>0) bins[i]+=b.kg*ov/b.l; } }
+  const requested=r.boxes.length+r.left.reduce((a,l)=>a+l.n,0);
+  const minX=r.boxes.length?Math.min(...r.boxes.map(b=>b.x)):0;
+  const clearLen=r.boxes.length?Math.max(0,c.L-maxX)+minX:c.L;
+  const free=Math.max(0,vol-used), clearVol=clearLen*c.W*c.H;
+  return {vol,used,volPct:used/vol*100,wtPct:r.total/c.payload*100,cog:{x:mx/t,y:my/t,z:mz/t},front,rear:r.total-front,leftSide,rightSide:r.total-leftSide,maxX,maxZ,voidLen:c.L-maxX,bins,binLen,requested,free,clearLen,clearVol,frontGap:minX};
+}
+function warnings(r,a){
+  const w=[]; const c=r.c;
+  const reqKg=state.items.filter(validItem).reduce((s,it)=>s+it.kg*it.qty,0);
+  const why={space:'no space left',payload:'payload limit reached',door:'too large for the door opening',size:'larger than the container',cap:'over the 3,000-unit planning limit'};
+  if(r.validCount===0) w.push(['info','Info','Add cargo items to calculate a load plan.']);
+  const bad=state.items.filter(it=>!validItem(it)&&(it.name||it.l||it.w||it.h));
+  if(bad.length) w.push(['warn','Check',bad.map(it=>esc(it.name||'Unnamed item')).join(', ')+' '+(bad.length>1?'are':'is')+' missing a dimension or quantity and was skipped.']);
+  if(reqKg>c.payload+E) w.push(['bad','Overweight','Cargo list weighs '+fmtW(reqKg)+', which is '+fmtW(reqKg-c.payload)+' over the '+fmtW(c.payload)+' payload. Not all units can ship in this container.']);
+  for(const l of r.left) w.push(['bad','Left over',l.n+' × '+esc(l.it.name||'Unnamed item')+' not loaded: '+why[l.why]+'.']);
+  if(r.boxes.length){
+    if(a.wtPct>95&&reqKg<=c.payload+E) w.push(['warn','Near limit','Payload used is '+a.wtPct.toFixed(0)+'%. Confirm actual weights before sealing.']);
+    const fp=r.total?a.front/r.total*100:50;
+    if(fp>60||fp<40) w.push(['warn','Unbalanced',Math.round(fp)+'% of the weight is in the '+(fp>50?'front':'door')+' half. Aim for close to 50/50 (60/40 at most) along the length.'+(fp>50&&!c.centerLen&&a.voidLen>30?' Tick "Centre a part load along the length" in the container panel, or spread heavy units over more rows.':' Spread heavy units over more rows.')]);
+    const lp=r.total?a.leftSide/r.total*100:50;
+    if(lp>55||lp<45) w.push(['warn','Unbalanced',Math.round(lp)+'% of the weight is on the '+(lp>50?'left':'right')+' side. Keep left and right within about 55/45.']);
+    const cogOff=Math.abs(a.cog.x-c.L/2);
+    if(cogOff>c.L*0.1&&!(fp>60||fp<40)) w.push(['warn','Center of gravity','Load center is '+fmtPos(cogOff)+' from mid-length. Keep it close to the middle of the container.']);
+    const frontGap=r.boxes.length?Math.min(...r.boxes.map(b=>b.x)):0;
+    if(frontGap>30) w.push(['info','Secure',fmtPos(frontGap)+' gap at the front wall. Fill it with dunnage or bracing before loading row 1.']);
+    if(a.voidLen>30) w.push(['info','Secure',fmtPos(a.voidLen)+' of free floor at the doors. Block or brace the last row so it cannot shift.']);
+    if(!r.left.length&&!w.some(x=>x[0]==='bad'||x[0]==='warn')) w.push(['ok','OK','All units fit within dimensions and payload. Balance is within the usual range.']);
+  }
+  return w;
+}
+
+/* ---------- drawing ---------- */
+const PAL_SCREEN={ink:'var(--ink)',muted:'var(--muted)',line:'var(--line)',floor:'var(--floor)',surface:'var(--surface)',accent:'var(--accent)',bad:'var(--bad)',font:'IBM Plex Sans, system-ui, sans-serif'};
+const PAL_PRINT={ink:'#15212a',muted:'#55636f',line:'#c5ced5',floor:'#eef1f3',surface:'#ffffff',accent:'#0d5876',bad:'#b0261d',font:'Helvetica, Arial, sans-serif'};
+function frame(c,depth){ const fs=Math.max(14,c.L/58); return {fs,padL:fs*1.8,padR:fs*1.8,padT:fs*2.2,padB:fs*0.8,vw:c.L+fs*3.6,vh:depth+fs*3}; }
+function ticks(c,f,pal,yTop){
+  const step=M()?100:60.96; let s=''; const every=c.L>900?2:1;
+  for(let i=0,x=0;x<=c.L+E;i++,x=i*step){
+    s+=`<line x1="${x}" x2="${x}" y1="${yTop-f.fs*0.45}" y2="${yTop}" style="stroke:${pal.muted}" stroke-width="${f.fs*0.08}"/>`;
+    if(i%every===0) s+=`<text x="${x}" y="${yTop-f.fs*0.65}" font-size="${f.fs*0.7}" text-anchor="middle" style="fill:${pal.muted}">${M()?i+' m':(i*2)+' ft'}</text>`;
+  }
+  return s;
+}
+function drawTop(r,a,upto,pal){
+  const c=r.c, f=frame(c,c.W), fs=f.fs;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f.vw} ${f.vh}" width="${Math.round(f.vw)}" height="${Math.round(f.vh)}" font-family="${pal.font}" role="img" aria-label="Top view of the load plan">`;
+  s+=`<g transform="translate(${f.padL},${f.padT})">`;
+  s+=ticks(c,f,pal,0);
+  s+=`<rect x="0" y="0" width="${c.L}" height="${c.W}" style="fill:${pal.floor};stroke:${pal.ink}" stroke-width="${fs*0.14}"/>`;
+  s+=`<text transform="translate(${-fs*0.7},${c.W/2}) rotate(-90)" font-size="${fs*0.62}" text-anchor="middle" letter-spacing="1" style="fill:${pal.muted}">FRONT WALL</text>`;
+  s+=`<text transform="translate(${c.L+fs*0.7},${c.W/2}) rotate(90)" font-size="${fs*0.62}" text-anchor="middle" letter-spacing="1" style="fill:${pal.muted}">DOORS</text>`;
+  const vis=r.boxes.filter(b=>b.seq<=upto).sort((p,q)=>(p.z-q.z)||(p.seq-q.seq));
+  for(const b of vis){
+    const last=b.seq===upto&&upto<r.boxes.length;
+    s+=`<rect x="${b.x}" y="${b.y}" width="${b.l}" height="${b.w}" style="fill:${b.it.color};stroke:${last?pal.accent:pal.surface}" stroke-width="${last?fs*0.3:fs*0.1}"/>`;
+  }
+  for(const b of vis){
+    const covered=vis.some(o=>o!==b&&o.z>b.z&&o.x<b.x+b.l&&o.x+o.l>b.x&&o.y<b.y+b.w&&o.y+o.w>b.y);
+    if(!covered&&b.l>fs*1.5&&b.w>fs*1.1) s+=`<text x="${b.x+b.l/2}" y="${b.y+b.w/2+fs*0.27}" font-size="${fs*0.72}" text-anchor="middle" fill="#ffffff">${b.seq}</text>`;
+  }
+  if(vis.length&&upto>=r.boxes.length){
+    const x=a.cog.x,y=a.cog.y,R=fs*0.55;
+    s+=`<g style="stroke:${pal.ink}" stroke-width="${fs*0.12}"><circle cx="${x}" cy="${y}" r="${R}" style="fill:${pal.surface}"/><line x1="${x-R*1.6}" x2="${x+R*1.6}" y1="${y}" y2="${y}"/><line x1="${x}" x2="${x}" y1="${y-R*1.6}" y2="${y+R*1.6}"/></g>`;
+    s+=`<line x1="${c.L/2}" x2="${c.L/2}" y1="0" y2="${c.W}" style="stroke:${pal.muted}" stroke-dasharray="${fs*0.4} ${fs*0.3}" stroke-width="${fs*0.07}"/>`;
+  }
+  s+='</g></svg>'; return s;
+}
+function drawSide(r,a,upto,pal){
+  const c=r.c, f=frame(c,c.H), fs=f.fs;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f.vw} ${f.vh}" width="${Math.round(f.vw)}" height="${Math.round(f.vh)}" font-family="${pal.font}" role="img" aria-label="Side view of the load plan">`;
+  s+=`<g transform="translate(${f.padL},${f.padT})">`;
+  s+=ticks(c,f,pal,0);
+  s+=`<rect x="0" y="0" width="${c.L}" height="${c.H}" style="fill:${pal.floor};stroke:${pal.ink}" stroke-width="${fs*0.14}"/>`;
+  s+=`<line x1="${c.L}" x2="${c.L}" y1="${c.H-c.doorH}" y2="${c.H}" style="stroke:${pal.accent}" stroke-width="${fs*0.35}"/>`;
+  s+=`<text transform="translate(${-fs*0.7},${c.H/2}) rotate(-90)" font-size="${fs*0.62}" text-anchor="middle" letter-spacing="1" style="fill:${pal.muted}">FRONT</text>`;
+  s+=`<text transform="translate(${c.L+fs*0.75},${c.H/2}) rotate(90)" font-size="${fs*0.62}" text-anchor="middle" letter-spacing="1" style="fill:${pal.muted}">DOORS</text>`;
+  const vis=r.boxes.filter(b=>b.seq<=upto).sort((p,q)=>(q.y-p.y)||(p.z-q.z));
+  for(const b of vis){
+    const last=b.seq===upto&&upto<r.boxes.length;
+    s+=`<rect x="${b.x}" y="${c.H-b.z-b.h}" width="${b.l}" height="${b.h}" style="fill:${b.it.color};stroke:${last?pal.accent:pal.surface}" stroke-width="${last?fs*0.3:fs*0.1}"/>`;
+  }
+  for(const b of vis){
+    const front=!vis.some(o=>o!==b&&o.y<b.y&&o.x<b.x+b.l&&o.x+o.l>b.x&&o.z<b.z+b.h&&o.z+o.h>b.z);
+    if(front&&b.l>fs*1.5&&b.h>fs*1.1) s+=`<text x="${b.x+b.l/2}" y="${c.H-b.z-b.h/2+fs*0.27}" font-size="${fs*0.72}" text-anchor="middle" fill="#ffffff">${b.seq}</text>`;
+  }
+  if(vis.length&&upto>=r.boxes.length){
+    const x=a.cog.x, y=c.H-a.cog.z, R=fs*0.5;
+    s+=`<g style="stroke:${pal.ink}" stroke-width="${fs*0.12}"><circle cx="${x}" cy="${y}" r="${R}" style="fill:${pal.surface}"/><line x1="${x-R*1.6}" x2="${x+R*1.6}" y1="${y}" y2="${y}"/><line x1="${x}" x2="${x}" y1="${y-R*1.6}" y2="${y+R*1.6}"/></g>`;
+  }
+  s+='</g></svg>'; return s;
+}
+function drawDist(r,a,pal){
+  const c=r.c, depth=c.W*0.55, f=frame(c,depth), fs=f.fs;
+  const mx=Math.max(1,...a.bins);
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${f.vw} ${f.vh-fs*1.4}" width="${Math.round(f.vw)}" height="${Math.round(f.vh-fs*1.4)}" font-family="${pal.font}" role="img" aria-label="Weight per section along the container length">`;
+  s+=`<g transform="translate(${f.padL},${fs*0.9})">`;
+  for(const g of [0.5,1]) s+=`<line x1="0" x2="${c.L}" y1="${depth-depth*g}" y2="${depth-depth*g}" style="stroke:${pal.line}" stroke-width="${fs*0.06}"/>`;
+  a.bins.forEach((v,i)=>{
+    const x=i*a.binLen, w=Math.min(a.binLen,c.L-x), h=depth*v/mx;
+    s+=`<rect x="${x+fs*0.12}" y="${depth-h}" width="${Math.max(0,w-fs*0.24)}" height="${h}" style="fill:${pal.accent}" opacity="0.85"/>`;
+    if(v>0&&w>fs*2) s+=`<text x="${x+w/2}" y="${depth-h-fs*0.25}" font-size="${fs*0.6}" text-anchor="middle" style="fill:${pal.muted}">${Math.round(wtOut(v)/100)/10}t</text>`;
+  });
+  s+=`<line x1="0" x2="${c.L}" y1="${depth}" y2="${depth}" style="stroke:${pal.ink}" stroke-width="${fs*0.1}"/>`;
+  s+=`<line x1="${c.L/2}" x2="${c.L/2}" y1="0" y2="${depth}" style="stroke:${pal.muted}" stroke-dasharray="${fs*0.4} ${fs*0.3}" stroke-width="${fs*0.07}"/>`;
+  s+='</g></svg>'; return s;
+}
+
+/* ---------- 3D view ---------- */
+const V={ok:false};
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim()||'#888';
+function textSprite(txt,col,hM){
+  const cv=document.createElement('canvas'); const fs=64; const x=cv.getContext('2d'); x.font='600 '+fs+'px Arial'; const w=Math.ceil(x.measureText(txt).width)+24; cv.width=w; cv.height=fs+24;
+  x.font='600 '+fs+'px Arial'; x.fillStyle=col; x.textBaseline='middle'; x.fillText(txt,12,cv.height/2);
+  const t=new THREE.CanvasTexture(cv); const sp=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false}));
+  sp.scale.set(hM*w/cv.height,hM,1); return sp;
+}
+function init3D(){
+  if(!window.THREE||!THREE.OrbitControls){ V.ok=false; $('#v3d').hidden=true; document.querySelector('.vtools').hidden=true; document.querySelector('.vhint').hidden=true; $('#vfail').hidden=false; $('#drawings').open=true; return; }
+  try{
+    const el=$('#v3d');
+    const ren=new THREE.WebGLRenderer({antialias:true,alpha:true}); ren.setPixelRatio(Math.min(2,window.devicePixelRatio||1)); el.appendChild(ren.domElement);
+    const scene=new THREE.Scene(); const cam=new THREE.PerspectiveCamera(35,1,0.05,300);
+    scene.add(new THREE.AmbientLight(0xffffff,0.62)); const d1=new THREE.DirectionalLight(0xffffff,0.55); d1.position.set(6,12,9); scene.add(d1); const d2=new THREE.DirectionalLight(0xffffff,0.22); d2.position.set(-8,5,-6); scene.add(d2);
+    const ctl=new THREE.OrbitControls(cam,ren.domElement); ctl.enableDamping=false; ctl.screenSpacePanning=true; ctl.addEventListener('change',()=>render3D());
+    Object.assign(V,{ok:true,el,ren,scene,cam,ctl,world:new THREE.Group(),cargo:[],camMode:'iso'}); scene.add(V.world);
+    new ResizeObserver(()=>size3D()).observe(el);
+    
+    
+    size3D();
+  }catch(e){ V.ok=false; $('#v3d').hidden=true; $('#vfail').hidden=false; $('#drawings').open=true; }
+}
+function size3D(){ if(!V.ok) return; const w=V.el.clientWidth, h=V.el.clientHeight; if(!w||!h) return; V.ren.setSize(w,h,false); V.cam.aspect=w/h; V.cam.updateProjectionMatrix(); if(!V.placed){ setCam(V.camMode); V.placed=true; } render3D(); }
+function render3D(){ if(V.ok) V.ren.render(V.scene,V.cam); }
+function camPose(mode,aspect,c){
+  const Lm=c.L/100,Wm=c.W/100,Hm=c.H/100, vf=35*Math.PI/180, hf=2*Math.atan(Math.tan(vf/2)*aspect);
+  const dirs={iso:[0.62,0.62,0.95],top:[0.0001,1,0.0001],side:[0,0.18,1],doors:[1,0.32,0.0001]};
+  const v=new THREE.Vector3(...dirs[mode]).normalize();
+  const span={iso:Math.max(Lm*0.95,Hm*1.6),top:Lm,side:Lm,doors:Math.max(Wm,Hm)*1.3}[mode];
+  const spanV={iso:Lm*0.55,top:Wm,side:Hm,doors:Math.max(Wm,Hm)*1.3}[mode];
+  let dist=Math.max(span*0.55/Math.tan(hf/2),spanV*0.62/Math.tan(vf/2))*1.08;
+  if(mode==='doors') dist+=Lm*0.5;
+  const target=new THREE.Vector3(mode==='doors'?Lm*0.1:0,mode==='top'?0:Hm*0.42,0);
+  return {pos:target.clone().add(v.multiplyScalar(dist)),target};
+}
+function setCam(mode){
+  if(!V.ok||!result) { V.camMode=mode; return; }
+  V.camMode=mode; const p=camPose(mode,V.cam.aspect||1.6,result.c);
+  V.cam.position.copy(p.pos); V.ctl.target.copy(p.target); V.cam.up.set(0,1,0); V.ctl.update(); render3D();
+}
+function build3D(force){
+  if(!V.ok) return;
+  if(!force&&V.builtFor===result) return;
+  const r=result,c=r.c,Lm=c.L/100,Wm=c.W/100,Hm=c.H/100;
+  V.world.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{ if(m.map) m.map.dispose(); m.dispose(); }); } });
+  V.scene.remove(V.world); V.world=new THREE.Group(); V.scene.add(V.world); V.cargo=[];
+  const P={ink:css('--ink'),muted:css('--muted'),line:css('--line'),floor:css('--floor'),accent:css('--accent'),sunk:css('--sunk')};
+  V.bg=P.sunk;
+  const pos=(x,y,z)=>new THREE.Vector3(x/100-Lm/2,z/100,y/100-Wm/2);
+  // floor
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(Lm,Wm),new THREE.MeshLambertMaterial({color:P.floor,side:THREE.DoubleSide}));
+  floor.rotation.x=-Math.PI/2; V.world.add(floor);
+  // floor grid every metre / 2 ft
+  const step=(M()?100:60.96)/100, gpts=[]; for(let x=step;x<Lm-1e-6;x+=step){ gpts.push(x-Lm/2,0.002,-Wm/2, x-Lm/2,0.002,Wm/2); }
+  const gg=new THREE.BufferGeometry(); gg.setAttribute('position',new THREE.Float32BufferAttribute(gpts,3)); V.world.add(new THREE.LineSegments(gg,new THREE.LineBasicMaterial({color:P.line})));
+  // front wall (translucent) and back side wall hint
+  const fw=new THREE.Mesh(new THREE.PlaneGeometry(Wm,Hm),new THREE.MeshBasicMaterial({color:P.muted,transparent:true,opacity:0.16,side:THREE.DoubleSide,depthWrite:false}));
+  fw.rotation.y=Math.PI/2; fw.position.set(-Lm/2,Hm/2,0); V.world.add(fw);
+  const sw=new THREE.Mesh(new THREE.PlaneGeometry(Lm,Hm),new THREE.MeshBasicMaterial({color:P.muted,transparent:true,opacity:0.07,side:THREE.DoubleSide,depthWrite:false}));
+  sw.position.set(0,Hm/2,-Wm/2); V.world.add(sw);
+  // container edges
+  const box=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(Lm,Hm,Wm)),new THREE.LineBasicMaterial({color:P.ink,transparent:true,opacity:0.55}));
+  box.position.set(0,Hm/2,0); V.world.add(box);
+  // door opening frame
+  const dw=c.doorW/100, dh=c.doorH/100, dp=[];
+  [[-dw/2,0],[ -dw/2,dh],[dw/2,dh],[dw/2,0]].forEach((p,i,arr)=>{ const q=arr[(i+1)%4]; dp.push(Lm/2,p[1],p[0], Lm/2,q[1],q[0]); });
+  const dg=new THREE.BufferGeometry(); dg.setAttribute('position',new THREE.Float32BufferAttribute(dp,3)); V.world.add(new THREE.LineSegments(dg,new THREE.LineBasicMaterial({color:P.accent})));
+  const lh=Math.max(0.22,Lm/40);
+  const t1=textSprite('FRONT WALL',P.muted,lh); t1.position.set(-Lm/2,Hm+lh*0.9,0); V.world.add(t1);
+  const t2=textSprite('DOORS',P.accent,lh); t2.position.set(Lm/2,Hm+lh*0.9,0); V.world.add(t2);
+  // cargo: one instanced mesh per item type (one draw call each), one edge mesh per loading step
+  const grey=new THREE.Color(P.muted), unit=new THREE.BoxGeometry(1,1,1);
+  const byItem=new Map(); r.boxes.forEach(b=>{ if(!byItem.has(b.it)) byItem.set(b.it,[]); byItem.get(b.it).push(b); });
+  const rowOf=new Map(); r.rows.forEach((row,i)=>row.boxes.forEach(b=>rowOf.set(b,i+1)));
+  const m4=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3();
+  V.ims=[];
+  for(const [it,list] of byItem){
+    const im=new THREE.InstancedMesh(unit,new THREE.MeshLambertMaterial({color:0xffffff}),list.length);
+    im.frustumCulled=false; im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+    const full=new THREE.Color(it.color), dim=full.clone().lerp(grey,0.72);
+    list.forEach((b,i)=>{ const M=new THREE.Matrix4(); sc.set(Math.max(0.01,b.l/100-0.006),Math.max(0.01,b.h/100-0.006),Math.max(0.01,b.w/100-0.006));
+      M.compose(pos(b.x+b.l/2,b.y+b.w/2,b.z+b.h/2),q,sc); im.setMatrixAt(i,M); im.setColorAt(i,full);
+      V.cargo.push({im,idx:i,M,full,dim,row:rowOf.get(b)}); });
+    V.world.add(im); V.ims.push(im);
+  }
+  V.zero=new THREE.Matrix4().makeScale(0,0,0);
+  V.edgeMat={full:new THREE.LineBasicMaterial({color:P.ink,transparent:true,opacity:0.35}),dim:new THREE.LineBasicMaterial({color:P.muted,transparent:true,opacity:0.35}),hi:new THREE.LineBasicMaterial({color:0xffffff})};
+  V.rowEdges=r.rows.map(row=>{
+    const pts=[];
+    for(const b of row.boxes){ const x0=b.x/100-Lm/2+0.003,x1=(b.x+b.l)/100-Lm/2-0.003,y0=b.z/100+0.003,y1=(b.z+b.h)/100-0.003,z0=b.y/100-Wm/2+0.003,z1=(b.y+b.w)/100-Wm/2-0.003;
+      const C=[[x0,y0,z0],[x1,y0,z0],[x1,y0,z1],[x0,y0,z1],[x0,y1,z0],[x1,y1,z0],[x1,y1,z1],[x0,y1,z1]];
+      [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]].forEach(([i,j])=>pts.push(...C[i],...C[j])); }
+    const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.Float32BufferAttribute(pts,3));
+    const ls=new THREE.LineSegments(g,V.edgeMat.full); ls.frustumCulled=false; V.world.add(ls); return ls; });
+  V.builtFor=r;
+  const key=[c.L,c.W,c.H].join('|');
+  if(!V.placed){ size3D(); } else if(V.cKey!==key) setCam(V.camMode);
+  V.cKey=key;
+}
+function applyStepTo(s){
+  const all=s>result.rows.length;
+  for(const o of V.cargo){
+    if(!all&&o.row>s) o.im.setMatrixAt(o.idx,V.zero);
+    else { o.im.setMatrixAt(o.idx,o.M); o.im.setColorAt(o.idx,(!all&&o.row<s)?o.dim:o.full); }
+  }
+  for(const im of V.ims){ im.instanceMatrix.needsUpdate=true; if(im.instanceColor) im.instanceColor.needsUpdate=true; }
+  V.rowEdges.forEach((e,i)=>{ const row=i+1; e.visible=all||row<=s; e.material=all?V.edgeMat.full:(row<s?V.edgeMat.dim:V.edgeMat.hi); });
+}
+function apply3D(){ if(!V.ok||!result) return; applyStepTo(step); render3D(); }
+/* step thumbnails: one off-screen renderer, fixed 3D camera */
+let thumbTimer=null, thumbRen=null;
+const thumbCache=new WeakMap(); let thumbGen=0;
+function paneVisible(n){ return mqWide.matches||(n==='setup'&&!mqPhone.matches)||((!mqPhone.matches&&tab==='setup')?'plan':tab)===n; }
+function putThumb(i,u){ const el=document.getElementById('thumb-'+i); if(el&&!el.firstElementChild) el.innerHTML=`<img alt="Step ${i}: container with this step's units highlighted" src="${u}">`; }
+function scheduleThumbs(){
+  clearTimeout(thumbTimer); const gen=++thumbGen;
+  if(!V.ok||!result||!result.rows.length) return;
+  const r=result; let list=thumbCache.get(r); if(!list){ list=[]; thumbCache.set(r,list); }
+  list.forEach((u,i)=>putThumb(i+1,u));
+  if(!paneVisible('steps')||list.length>=Math.min(r.rows.length,60)) return;
+  thumbTimer=setTimeout(function work(){
+    if(gen!==thumbGen||result!==r) return;
+    try{
+      const w=400,h=250;
+      if(!thumbRen){ thumbRen=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:false}); }
+      thumbRen.setPixelRatio(1); thumbRen.setSize(w,h,false); thumbRen.setClearColor(new THREE.Color(V.bg||'#f6f9fc'),1);
+      const cam=new THREE.PerspectiveCamera(35,w/h,0.05,300); const p=camPose('iso',w/h,r.c); cam.position.copy(p.pos); cam.lookAt(p.target);
+      const t0=performance.now();
+      while(list.length<Math.min(r.rows.length,60)&&performance.now()-t0<24){ const s=list.length+1; applyStepTo(s); thumbRen.render(V.scene,cam); const u=thumbRen.domElement.toDataURL('image/jpeg',0.82); list.push(u); putThumb(s,u); }
+      applyStepTo(step); render3D();
+      if(list.length<Math.min(r.rows.length,60)) thumbTimer=setTimeout(work,16);
+    }catch(e){}
+  },200);
+}
+function makeThumbs(bg,w,h){
+  return new Promise(res=>{
+    if(!V.ok||!result||!result.rows.length) return res([]);
+    try{
+      w=w||640; h=h||400;
+      if(!thumbRen){ thumbRen=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:false}); }
+      thumbRen.setPixelRatio(1); thumbRen.setSize(w,h,false); thumbRen.setClearColor(new THREE.Color(bg||V.bg||'#f0f3f5'),1);
+      const cam=new THREE.PerspectiveCamera(35,w/h,0.05,300); const p=camPose('iso',w/h,result.c); cam.position.copy(p.pos); cam.lookAt(p.target);
+      const out=[]; const lim=Math.min(result.rows.length,60);
+      for(let s=1;s<=lim;s++){ applyStepTo(s); thumbRen.render(V.scene,cam); out.push(thumbRen.domElement.toDataURL('image/jpeg',0.86)); }
+      applyStepTo(step); render3D(); res(out);
+    }catch(e){ res([]); }
+  });
+}
+function snapshot3D(bg,w,h){
+  if(!V.ok||!result) return null;
+  try{ if(!thumbRen) thumbRen=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true,alpha:false});
+    thumbRen.setPixelRatio(1); thumbRen.setSize(w,h,false); thumbRen.setClearColor(new THREE.Color(bg),1);
+    const cam=new THREE.PerspectiveCamera(35,w/h,0.05,300); const p=camPose('iso',w/h,result.c); cam.position.copy(p.pos); cam.lookAt(p.target);
+    applyStepTo(result.rows.length+1); thumbRen.render(V.scene,cam); const u=thumbRen.domElement.toDataURL('image/jpeg',0.9); applyStepTo(step); render3D(); return u; }catch(e){ return null; }
+}
+
+/* ---------- rendering ---------- */
+let result=null, an=null, step=1, calcTimer=null;
+const nSteps=()=>result?result.rows.length+1:1; /* last step = complete load */
+const stepUpto=()=>{ const r=result; if(!r||step>r.rows.length) return r?r.boxes.length:0; const row=r.rows[step-1]; return row.boxes[row.boxes.length-1].seq; };
+function renderUnits(){
+  $('#u-metric').setAttribute('aria-pressed',M()); $('#u-imperial').setAttribute('aria-pressed',!M());
+  document.querySelectorAll('[data-lu]').forEach(e=>e.textContent='('+LU()+')');
+  document.querySelectorAll('[data-wu]').forEach(e=>e.textContent='('+WU()+')');
+}
+function renderContainer(){
+  const sel=$('#ctype'); if(!sel.options.length) sel.innerHTML=Object.entries(PRESETS).map(([k,p])=>`<option value="${k}">${esc(p.label)}</option>`).join('');
+  if(sel.value!==state.ctype) sel.value=state.ctype; const c=state.c;
+  $('#cL').value=r1(lenOut(c.L)); $('#cW').value=r1(lenOut(c.W)); $('#cH').value=r1(lenOut(c.H));
+  const custom=state.ctype==='CUSTOM';
+  ['cL','cW','cH','cDW','cDH'].forEach(id=>{ const el=$('#'+id); el.readOnly=!custom; el.tabIndex=custom?0:-1; el.title=custom?'':'Standard size for this container. Choose Custom dimensions to change.'; });
+  $('#dimHint').textContent=custom?'Enter the inside dimensions and door opening of your container.':'Inside dimensions and door opening are the standard values for this container type. Choose Custom dimensions to enter your own.';
+  $('#cCenter').checked=!!c.centerLen;
+  $('#cDW').value=r1(lenOut(c.doorW)); $('#cDH').value=r1(lenOut(c.doorH)); $('#cP').value=Math.round(wtOut(c.payload));
+  renderPlate();
+}
+function renderPlate(){
+  const c=state.c;
+  $('#plate').innerHTML=`<div style="grid-column:1/-1">Inside L×W×H <b>${[c.L,c.W,c.H].map(v=>r1(lenOut(v))).join(' × ')} ${LU()}</b></div><div>Payload <b>${fmtW(c.payload)}</b></div><div>Cu. cap. <b>${fmtVol(c.L*c.W*c.H)}</b></div><div>Floor <b>${M()?((c.L*c.W)/1e4).toFixed(1)+' m²':Math.round(c.L*c.W/929.03)+' ft²'}</b></div><div>Door <b>${r1(lenOut(c.doorW))}×${r1(lenOut(c.doorH))}</b></div>`;
+}
+const openItems=new Set();
+function itemSum(it){ return (it.l&&it.w&&it.h?[it.l,it.w,it.h].map(v=>r1(lenOut(v))).join('×')+' '+LU():'size missing')+' · '+(it.kg?fmtW(it.kg):'weight missing')+' · ×'+(it.qty||0); }
+function itemCard(it){
+  const lu=LU(), wu=WU(), open=openItems.has(it.id);
+  const opt=(f,v,label,on)=>`<button class="opt" type="button" data-act="set" data-f="${f}" data-v="${v}" aria-pressed="${on}">${label}</button>`;
+  return `<div class="item${open?' open':''}" data-id="${it.id}">
+    <button class="ihead" type="button" data-act="toggle" aria-expanded="${open}">
+      <span class="sw" style="background:${it.color}"></span>
+      <span class="iname">${esc(it.name||'New item')}</span>
+      <span class="isum">${esc(itemSum(it))}</span>
+      <span class="ist" data-st="${it.id}"></span>
+      <span class="chev" aria-hidden="true">▾</span>
+    </button>
+    <div class="ibody"${open?'':' hidden'}>
+      <label class="f">Item name<input data-f="name" type="text" value="${esc(it.name)}" placeholder="e.g. EUR pallet – cartons" id="n-${it.id}"></label>
+      <div class="fields">
+        <label class="f">Length (${lu})<input id="l-${it.id}" data-f="l" type="number" step="any" inputmode="decimal" value="${it.l?r1(lenOut(it.l)):''}"></label>
+        <label class="f">Width (${lu})<input id="w-${it.id}" data-f="w" type="number" step="any" inputmode="decimal" value="${it.w?r1(lenOut(it.w)):''}"></label>
+        <label class="f">Height (${lu})<input id="h-${it.id}" data-f="h" type="number" step="any" inputmode="decimal" value="${it.h?r1(lenOut(it.h)):''}"></label>
+      </div>
+      <div class="fields">
+        <label class="f">Weight / unit (${wu})<input id="k-${it.id}" data-f="kg" type="number" step="any" inputmode="decimal" value="${it.kg?r1(wtOut(it.kg)):''}"></label>
+        <div class="f" style="grid-column:span 2"><label for="q-${it.id}">Quantity</label><div class="qty"><button type="button" data-act="qminus" aria-label="One less">−</button><input id="q-${it.id}" data-f="qty" type="number" step="1" min="0" inputmode="numeric" value="${it.qty||''}"><button type="button" data-act="qplus" aria-label="One more">+</button></div></div>
+      </div>
+      <div class="optrow">Stacking<div class="opts" role="group" aria-label="Stacking">${opt('stack','yes','Stackable',it.stack)}${opt('stack','no','Nothing on top',!it.stack)}</div></div>
+      <label class="f" data-maxtop${it.stack?'':' hidden'}>Max load on top (${wu})<input id="m-${it.id}" data-f="maxTop" type="number" step="any" inputmode="decimal" placeholder="No limit" value="${it.maxTop?Math.round(wtOut(it.maxTop)):''}"></label>
+      <div class="optrow">Rotation<div class="opts" role="group" aria-label="Rotation">${opt('rot','fixed','Fixed',it.rot==='fixed')}${opt('rot','floor','Side up · turn on floor',it.rot==='floor')}${opt('rot','any','Any way',it.rot==='any')}</div></div>
+      <div class="ifoot"><button class="btn" data-act="dup" type="button">Duplicate</button><button class="btn danger" data-act="del" type="button">Remove</button></div>
+    </div></div>`;
+}
+function refreshItemHead(card,it){ card.querySelector('.iname').textContent=it.name||'New item'; card.querySelector('.isum').textContent=itemSum(it); }
+function updateItemStatus(){
+  if(!result) return;
+  state.items.forEach(it=>{ const el=document.querySelector(`[data-st="${it.id}"]`); if(!el) return;
+    if(!validItem(it)){ el.className='ist bad'; el.textContent='Incomplete'; return; }
+    const n=result.boxes.filter(b=>b.it.id===it.id).length; const lo=it.qty-n;
+    el.className='ist '+(lo?'bad':'ok'); el.textContent=lo?lo+' left':'✓ '+n; });
+}
+function renderItems(){
+  $('#items').innerHTML=state.items.length?state.items.map(itemCard).join(''):'<div class="empty">No cargo yet. Add the first item.</div>';
+  $('#exampleChip').hidden=!state.example;
+  updateItemStatus();
+}
+function drawMini(r){
+  const c=r.c, pad=6, vw=c.L+pad*2, vh=c.W+pad*2;
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${vw} ${vh}" role="img" aria-label="Top view of this option"><g transform="translate(${pad},${pad})">`;
+  s+=`<rect x="0" y="0" width="${c.L}" height="${c.W}" style="fill:var(--floor);stroke:var(--ink)" stroke-width="${c.L/220}"/>`;
+  for(const b of r.boxes.slice().sort((p,q)=>p.z-q.z)) s+=`<rect x="${b.x}" y="${b.y}" width="${b.l}" height="${b.w}" fill="${b.it.color}" style="stroke:var(--surface)" stroke-width="${c.L/400}"/>`;
+  s+=`<rect x="${c.L-c.L/160}" y="0" width="${c.L/160}" height="${c.W}" style="fill:var(--accent)"/>`;
+  return s+'</g></svg>';
+}
+function renderOptions(){
+  if(!options.length||!result) return;
+  const cur=result.key;
+  $('#opts4').innerHTML=options.map(o=>{
+    const r=o.r,a=o.an, fp=r.total?Math.round(a.front/r.total*100):0, lo=a.requested-r.boxes.length;
+    const balOk=r.total&&fp>=40&&fp<=60;
+    return `<button class="ocard" type="button" role="radio" data-opt="${o.key}" aria-checked="${o.key===cur}">
+      <div class="oh"><span class="on">${STRATS[o.key].name}</span>${o.key===recKey?'<span class="rec">Recommended</span>':''}</div>
+      <div class="mini">${drawMini(r)}</div>
+      <div class="om">
+        <span>Loaded <b class="${lo?'bad':'good'}">${r.boxes.length}/${a.requested}</b></span>
+        <span>Volume <b>${a.volPct.toFixed(0)}%</b></span>
+        <span>Space left <b>${fmtVol(a.free)}</b></span>
+        <span>Front/doors <b class="${r.total?(balOk?'good':'bad'):''}">${r.total?fp+'/'+(100-fp):'–'}</b></span>
+        <span>Length <b>${fmtPos(a.maxX)}</b></span>
+      </div>
+      <div class="od">${STRATS[o.key].desc}</div>
+      <div class="sel">${o.key===cur?'✓ Showing this option':'Use this option'}</div>
+    </button>`; }).join('');
+}
+$('#opts4').addEventListener('click',e=>{ const b=e.target.closest('.ocard'); if(!b) return; const k=b.dataset.opt; state.option=k; const o=options.find(x=>x.key===k); if(!o) return;
+  result=o.r; an=o.an; $('#step').dataset.all='1'; renderResults(); renderOptions(); store('clp.draft',state); toast(STRATS[k].name+' selected'); });
+const PRACTICAL=0.85;
+let fillGen=0;
+function renderFill(){
+  if(!paneVisible('report')){ V.fillPending=true; return; }
+  V.fillPending=false;
+  const r=result,a=an,c=r.c, gen=++fillGen;
+  const cap=a.vol, prac=cap*PRACTICAL, loaded=a.used, can=Math.max(0,prac-loaded);
+  const reqV=state.items.filter(validItem).reduce((s,it)=>s+it.l*it.w*it.h*it.qty,0);
+  const wLeft=Math.max(0,c.payload-r.total);
+  const pct=v=>Math.min(100,v/cap*100);
+  $('#fillCap').innerHTML=`<div class="fcap">
+    <div class="fbig"><b>${fmtVol(can)}</b><span>more you can realistically fill</span></div>
+    <div class="fbar" aria-hidden="true"><i style="width:${pct(loaded)}%;background:var(--accent)"></i><i style="width:${pct(can)}%;background:var(--ok)"></i><span class="mark" style="left:${PRACTICAL*100}%"></span></div>
+    <div class="flegend">
+      <span class="k"><i class="sw" style="background:var(--accent)"></i>Loaded now</span><b>${fmtVol(loaded)}</b>
+      <span class="k"><i class="sw" style="background:var(--ok)"></i>Can still fill (practical)</span><b>${fmtVol(can)}</b>
+      <span class="k"><i class="sw" style="background:var(--floor);box-shadow:inset 0 0 0 1px var(--line)"></i>Lost to gaps and packing (~${Math.round((1-PRACTICAL)*100)}%)</span><b>${fmtVol(cap-prac)}</b>
+      <span class="k tot">Container capacity</span><b>${fmtVol(cap)}</b>
+      <span class="k">Practical maximum (black line)</span><b>${fmtVol(prac)}</b>
+      <span class="k">Your full cargo list</span><b style="${reqV>prac?'color:var(--bad)':''}">${fmtVol(reqV)}</b>
+      <span class="k">Payload left</span><b>${fmtW(wLeft)}</b>
+    </div>
+    <div class="hint">Practical maximum assumes about ${Math.round(PRACTICAL*100)}% of the inside volume can be used with cartons and pallets. Exact room depends on unit sizes. Below: how many more of each item fit in the space left, with the current load kept as planned.</div>
+    <div class="k" style="font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)">Extra units that still fit · one item type at a time</div>
+    <ul class="more" id="moreList"><li class="hint">Working out how many more units fit…</li></ul>
+  </div>`;
+  const items=state.items.filter(validItem).slice(0,8);
+  if(!items.length){ $('#moreList').innerHTML='<li class="hint">Add cargo to see how many more units fit.</li>'; return; }
+  const strat=STRATS[r.key]||STRATS.heavy; const out=[]; let i=0;
+  const step=()=>{
+    if(gen!==fillGen) return;
+    const it=items[i++]; const unitV=it.l*it.w*it.h;
+    const extra=Math.max(1,Math.min(2000,Math.ceil(Math.max(0,cap-loaded)/unitV)+2, it.kg>0?Math.floor(wLeft/it.kg)+1:2000));
+    const tr=packCore(c,state.items,strat.order==='multi'?'volume':strat.order,{item:it,qty:extra});
+    const xi=tr.xItem;
+    const n=tr.boxes.filter(b=>b.it===xi).length;
+    const lim=tr.left.find(l=>l.it===xi&&l.why==='payload')?'payload':'space';
+    out.push({it,n,v:n*unitV,lim});
+    $('#moreList').innerHTML=out.map(o=>`<li><span><i class="sw" style="background:${o.it.color}"></i>${esc(o.it.name||'Unnamed')}</span><b>${o.n?'+'+o.n+' units · '+fmtVol(o.v):'no more fit'}${o.n?(o.lim==='payload'?' · weight-limited':''):''}</b></li>`).join('')+(i<items.length?'<li class="hint">Checking next item…</li>':'');
+    if(i<items.length) setTimeout(step,0);
+  };
+  setTimeout(step,30);
+}
+function renderResults(){
+  const r=result, a=an, c=r.c;
+  const w=warnings(r,a);
+  const nBad=w.filter(x=>x[0]==='bad').length, nWarn=w.filter(x=>x[0]==='warn').length;
+  const wb=$('#warnBadge'); wb.hidden=!(nBad+nWarn); wb.textContent=nBad+nWarn; wb.className='badge'+(nBad?'':' warn');
+  const lo=a.requested-r.boxes.length;
+  $('#sumChips').innerHTML=`<button class="sumchip ${lo?'bad':(r.boxes.length?'ok':'')}" type="button" data-go="report"><b>${r.boxes.length}/${a.requested}</b> units</button><button class="sumchip" type="button" data-go="report"><b>${a.volPct.toFixed(0)}%</b> volume</button><button class="sumchip" type="button" data-go="report"><b>${fmtVol(a.free)}</b> free</button><button class="sumchip ${a.wtPct>100?'bad':(a.wtPct>95?'warn':'')}" type="button" data-go="report"><b>${a.wtPct.toFixed(0)}%</b> payload</button>${nBad+nWarn?`<button class="sumchip ${nBad?'bad':'warn'}" type="button" data-go="report"><b>${nBad+nWarn}</b> warning${nBad+nWarn>1?'s':''}</button>`:(r.boxes.length?'<button class="sumchip ok" type="button" data-go="report">✓ Load OK</button>':'')}`;
+  updateItemStatus();
+  $('#warns').innerHTML=w.map(([k,t,m])=>`<li class="w-${k}"><span class="pill">${t}</span><span>${m}</span></li>`).join('');
+  const cls=p=>p>100?'over':(p>90?'hi':'');
+  $('#stats').innerHTML=`
+    <div class="stat"><span class="k">Units loaded</span><span class="v">${r.boxes.length}<span style="font-size:14px;color:var(--muted)"> / ${a.requested}</span></span><span class="s">${a.requested-r.boxes.length?(a.requested-r.boxes.length)+' left over':'All units fit'}</span></div>
+    <div class="stat"><span class="k">Volume used</span><span class="v">${a.volPct.toFixed(1)}%</span><div class="bar"><i class="${cls(a.volPct)}" style="width:${Math.min(100,a.volPct)}%"></i></div><span class="s num">${fmtVol(a.used)} of ${fmtVol(a.vol)}</span></div>
+    <div class="stat"><span class="k">Payload used</span><span class="v">${a.wtPct.toFixed(1)}%</span><div class="bar"><i class="${cls(a.wtPct)}" style="width:${Math.min(100,a.wtPct)}%"></i></div><span class="s num">${fmtW(r.total)} of ${fmtW(c.payload)}</span></div>
+    <div class="stat"><span class="k">Floor length used</span><span class="v">${fmtPos(a.maxX)}</span><span class="s">Free at doors: ${fmtPos(Math.max(0,a.voidLen))}</span></div>
+    <div class="stat" style="grid-column:1/-1;background:var(--ok-soft);border-color:transparent"><span class="k">Space left</span><span class="v">${fmtVol(a.free)}</span><div class="bar" style="background:var(--surface)"><i style="width:${Math.min(100,a.free/a.vol*100)}%;background:var(--ok)"></i></div><span class="s">${(a.free/a.vol*100).toFixed(1)}% of the container is empty. <b style="font-weight:600;color:var(--ink)">${fmtVol(a.clearVol)}</b> of that is clear floor-to-roof space (${fmtPos(a.clearLen)} of length${a.frontGap>1?', including the gap at the front wall':', at the doors'}); the rest is gaps beside and above the cargo.</span></div>`;
+  const used=new Set(r.boxes.map(b=>b.it.id));
+  $('#legend').innerHTML=state.items.filter(it=>validItem(it)).map(it=>`<span><i class="sw" style="background:${it.color}"></i>${esc(it.name||'Unnamed')}${used.has(it.id)?'':' (none loaded)'}</span>`).join('');
+  const st=$('#step'); st.max=nSteps(); if(step>nSteps()||st.dataset.all!=='0') step=nSteps(); st.value=step;
+  renderSteps(); build3D(); drawViews();
+  const fp=r.total?a.front/r.total*100:50, lp=r.total?a.leftSide/r.total*100:50;
+  const track=(p,l1,l2,e1,e2)=>`<div class="balance"><strong style="font-weight:500">${l1}</strong><div class="track"><i style="width:${p}%;background:var(--accent)">${r.total?Math.round(p)+'%':''}</i><i style="width:${100-p}%;background:var(--muted)">${r.total?Math.round(100-p)+'%':''}</i></div><div class="ends"><span>${e1} ${fmtW(l2[0])}</span><span>${e2} ${fmtW(l2[1])}</span></div></div>`;
+  $('#balance').innerHTML=track(fp,'Front / door half',[a.front,a.rear],'Front','Doors')+track(lp,'Left / right side',[a.leftSide,a.rightSide],'Left','Right');
+  $('#perLbl').textContent='per '+(M()?'1 m':'2 ft')+' section · dashed line = mid-length';
+  const rowsT=state.items.filter(validItem).map(it=>{
+    const n=r.boxes.filter(b=>b.it.id===it.id).length; const lo=it.qty-n;
+    const why=r.left.filter(l=>l.it.id===it.id).map(l=>({space:'No space',payload:'Payload',door:'Door too small',size:'Too large',cap:'Unit limit'}[l.why])).join(', ');
+    return `<tr><td><span class="row" style="gap:6px;flex-wrap:nowrap"><i class="sw" style="background:${it.color}"></i>${esc(it.name||'Unnamed')}</span></td><td class="num">${fmtDim(it)}</td><td class="r num">${fmtW(it.kg)}</td><td class="r num">${it.qty}</td><td class="r num">${n}</td><td class="r num" style="${lo?'color:var(--bad);font-weight:600':''}">${lo}</td><td>${lo?why:'—'}</td></tr>`;
+  }).join('');
+  renderFill();
+  $('#itemTable').innerHTML=`<thead><tr><th>Item</th><th>L × W × H</th><th class="r">Unit wt</th><th class="r">Qty</th><th class="r">Loaded</th><th class="r">Left</th><th>Reason</th></tr></thead><tbody>${rowsT||'<tr><td colspan="7" class="hint">No valid items.</td></tr>'}</tbody>`;
+}
+function turnOf(b){ const it=b.it; if(Math.abs(b.h-it.h)>E) return 2; return Math.abs(b.l-it.l)>E?1:0; }
+function rowGroups(row){
+  const by=new Map();
+  row.boxes.forEach(b=>{ const e=by.get(b.it.id)||{it:b.it,floor:0,up:0,kg:0,turned:0,side:0,levels:new Set()}; b.z<E?e.floor++:e.up++; e.kg+=b.kg; const t=turnOf(b); if(t===1)e.turned++; if(t===2)e.side++; e.levels.add(Math.round(b.z)); by.set(b.it.id,e); });
+  return [...by.values()].sort((p,q)=>q.kg-p.kg);
+}
+function instHTML(row){
+  return '<div class="inst">'+rowGroups(row).map(e=>{
+    const n=e.floor+e.up; const lv=e.levels.size;
+    let t=`<div><i class="sw" style="background:${e.it.color}"></i><span><b style="font-weight:600">${n} × ${esc(e.it.name||'Unnamed')}</b> · ${e.floor} on floor${e.up?', '+e.up+' stacked':''}${lv>1?' ('+lv+' high)':''}`;
+    if(e.turned) t+=` <span class="tag">${e.turned===n?'':e.turned+' '}turned 90°</span>`;
+    if(e.side) t+=` <span class="tag">${e.side===n?'':e.side+' '}laid on side</span>`;
+    if(!e.it.stack) t+=` <span class="tag">nothing on top</span>`;
+    return t+'</span></div>';
+  }).join('')+'</div>';
+}
+function renderSteps(){
+  const r=result;
+  if(!r.rows.length){ $('#steps').innerHTML='<div class="empty">Add cargo to see step-by-step loading instructions.</div>'; return; }
+  $('#steps').innerHTML=r.rows.map((row,i)=>{
+    const kg=row.boxes.reduce((s,b)=>s+b.kg,0);
+    return `<button class="scard" type="button" data-step="${i+1}" aria-current="${step===i+1}"><div class="img" id="thumb-${i+1}">${V.ok?'Rendering…':'Step '+(i+1)}</div><div class="body"><div class="no"><b>Step ${i+1}</b><span>${fmtW(kg)}</span></div><div class="hint num">${fmtPos(row.start)} – ${fmtPos(row.end)} from front wall · units ${row.boxes[0].seq}–${row.boxes[row.boxes.length-1].seq}</div>${instHTML(row)}</div></button>`;
+  }).join('');
+  scheduleThumbs();
+}
+function renderStepNow(){
+  const r=result, n=nSteps();
+  if(!r.boxes.length){ $('#stepNow').innerHTML='<div class="t">No units loaded</div><div class="hint">Add cargo items to build the plan.</div>'; return; }
+  if(step>r.rows.length){
+    const a=an; const gap=Math.max(0,a.voidLen);
+    $('#stepNow').innerHTML=`<div class="t">Complete load · ${r.boxes.length} units in ${r.rows.length} steps</div><div class="pos">Option: ${STRATS[r.key]?.name||''}</div><div class="pos">${fmtW(r.total)} · load length ${fmtPos(a.maxX)}${gap>30?' · '+fmtPos(gap)+' free at doors: brace before closing':''}</div><div class="hint">Use Prev or tap a step below to walk through the loading order. Grey = already loaded, colour = load now.</div>`;
+  } else {
+    const row=r.rows[step-1];
+    $('#stepNow').innerHTML=`<div class="t">Step ${step} of ${r.rows.length}</div><div class="pos">${fmtPos(row.start)} – ${fmtPos(row.end)} from front wall · units ${row.boxes[0].seq}–${row.boxes[row.boxes.length-1].seq} · bottom layer first</div>${instHTML(row)}`;
+  }
+  document.querySelectorAll('.scard').forEach(c=>c.setAttribute('aria-current',String(+c.dataset.step===step)));
+}
+function drawViews(){
+  const r=result,a=an, upto=stepUpto();
+  renderStepNow(); apply3D();
+  if($('#drawings').open){ $('#vTop').innerHTML=drawTop(r,a,upto,PAL_SCREEN); $('#vSide').innerHTML=drawSide(r,a,upto,PAL_SCREEN); }
+  if(V.distFor!==r){ V.distFor=r; $('#vDist').innerHTML=drawDist(r,a,PAL_SCREEN); }
+}
+let options=[], recKey='heavy';
+function optScore(o){ const a=o.an, r=o.r; const fp=r.total?a.front/r.total*100:50, lp=r.total?a.leftSide/r.total*100:50;
+  return {units:r.boxes.length, bal:Math.max(0,Math.abs(fp-50)-10)+Math.max(0,Math.abs(lp-50)-5), len:a.maxX}; }
+let calcGen=0;
+function calc(){
+  const gen=++calcGen, t0=performance.now();
+  const want=(state.option&&STRATS[state.option])?state.option:null;
+  const order=want?[want,...STRAT_KEYS.filter(k=>k!==want)]:STRAT_KEYS.slice();
+  const done=[]; let i=0;
+  const next=()=>{
+    if(gen!==calcGen) return;
+    const k=order[i++]; const r=pack(state.c,state.items,STRATS[k]); done.push({key:k,r,an:analyse(r)});
+    if(want&&i===1){ result=r; an=done[0].an; renderResults(); if(options.length) renderOptions(); }
+    if(i<order.length){ $('#busy').textContent='Comparing loading options…'; setTimeout(next,0); return; }
+    options=done.sort((p,q)=>STRAT_KEYS.indexOf(p.key)-STRAT_KEYS.indexOf(q.key));
+    /* recommend: most units loaded, then best balance, then shortest load */
+    const ranked=options.slice().sort((p,q)=>{ const a=optScore(p),b=optScore(q); return (b.units-a.units)||(a.bal-b.bal)||(a.len-b.len)||(STRAT_KEYS.indexOf(p.key)-STRAT_KEYS.indexOf(q.key)); });
+    recKey=ranked[0].key;
+    if(!want){ const o=options.find(x=>x.key===recKey); result=o.r; an=o.an; renderResults(); }
+    renderOptions();
+    const ms=performance.now()-t0; $('#busy').textContent='4 options in '+(ms<1000?Math.round(ms)+' ms':(ms/1000).toFixed(1)+' s');
+    store('clp.draft',state);
+  };
+  next();
+}
+function schedule(){ $('#busy').textContent='Calculating…'; clearTimeout(calcTimer); calcTimer=setTimeout(calc,250); }
+
+/* ---------- events ---------- */
+function setUnits(u){ state.units=u; renderUnits(); renderContainer(); renderItems(); calc(); }
+$('#u-metric').onclick=()=>setUnits('metric'); $('#u-imperial').onclick=()=>setUnits('imperial');
+function onType(e){ const k=e.target.value; if(!PRESETS[k]) return; if(k===state.ctype&&e.type==='change') {} state.ctype=k; if(k!=='CUSTOM'){ const p=PRESETS[k]; state.c={L:p.L,W:p.W,H:p.H,doorW:p.doorW,doorH:p.doorH,payload:p.payload,centerLen:state.c.centerLen}; } renderContainer(); schedule(); }
+$('#ctype').addEventListener('change',onType); $('#ctype').addEventListener('input',onType);
+[['cL','L'],['cW','W'],['cH','H'],['cDW','doorW'],['cDH','doorH']].forEach(([id,k])=>$('#'+id).addEventListener('input',e=>{ if(state.ctype!=='CUSTOM') return; const v=lenIn(num(e.target.value)); if(v>0){ state.c[k]=v; renderPlate(); schedule(); } }));
+$('#cCenter').addEventListener('change',e=>{ state.c.centerLen=e.target.checked; schedule(); });
+$('#cP').addEventListener('input',e=>{ const v=wtIn(num(e.target.value)); if(v>0){ state.c.payload=v; renderPlate(); schedule(); } });
+function onItemInput(e){
+  const card=e.target.closest('[data-id]'); if(!card) return; const it=state.items.find(x=>x.id===card.dataset.id); const f=e.target.dataset.f; if(!it||!f) return;
+  const v=e.target.value;
+  if(f==='l'||f==='w'||f==='h') it[f]=lenIn(num(v));
+  else if(f==='kg'||f==='maxTop') it[f]=wtIn(num(v));
+  else if(f==='qty') it.qty=Math.max(0,Math.floor(num(v)));
+  else if(f==='name') it.name=v;
+  refreshItemHead(card,it); exampleOff();
+  schedule();
+}
+$('#items').addEventListener('input',onItemInput);
+$('#items').addEventListener('click',e=>{
+  const btn=e.target.closest('[data-act]'); if(!btn) return; const card=btn.closest('[data-id]'); const id=card.dataset.id; const i=state.items.findIndex(x=>x.id===id); const it=state.items[i];
+  const act=btn.dataset.act;
+  if(act==='toggle'){ const open=!openItems.has(id); open?openItems.add(id):openItems.delete(id); card.classList.toggle('open',open); card.querySelector('.ibody').hidden=!open; btn.setAttribute('aria-expanded',open); return; }
+  if(act==='qminus'||act==='qplus'){ it.qty=Math.max(0,(it.qty||0)+(act==='qplus'?1:-1)); card.querySelector('[data-f=qty]').value=it.qty; refreshItemHead(card,it); exampleOff(); schedule(); return; }
+  if(act==='set'){ const f=btn.dataset.f, v=btn.dataset.v; if(f==='stack'){ it.stack=v==='yes'; card.querySelector('[data-maxtop]').hidden=!it.stack; } else it.rot=v;
+    btn.parentElement.querySelectorAll('.opt').forEach(o=>o.setAttribute('aria-pressed',String(o===btn))); exampleOff(); schedule(); return; }
+  if(act==='del'){ state.items.splice(i,1); openItems.delete(id); }
+  else if(act==='dup'){ const cp=mkItem(Object.assign({},it,{name:(it.name||'Item')+' (copy)'}),0); cp.id='i'+(uid++); cp.color=nextColor(); state.items.splice(i+1,0,cp); openItems.add(cp.id); }
+  exampleOff(); renderItems(); schedule();
+});
+function exampleOff(){ if(state.example){ state.example=false; $('#exampleChip').hidden=true; } }
+function nextColor(){ const used=new Set(state.items.map(i=>i.color)); return COLORS.find(c=>!used.has(c))||COLORS[state.items.length%COLORS.length]; }
+$('#addItem').onclick=()=>{ const it=mkItem({},0); it.color=nextColor(); state.items.push(it); openItems.add(it.id); renderItems(); const el=document.getElementById('n-'+it.id); if(el) el.focus(); schedule(); };
+let clearArmed=false;
+$('#clearItems').onclick=e=>{ if(!state.items.length) return; if(!clearArmed){ clearArmed=true; e.target.textContent='Tap again to clear'; setTimeout(()=>{clearArmed=false;e.target.textContent='Clear list';},3000); return; } clearArmed=false; e.target.textContent='Clear list'; state.items=[]; state.example=false; renderItems(); schedule(); };
+/* ---------- panes / tabs ---------- */
+const mqPhone=window.matchMedia('(max-width:759px)'), mqWide=window.matchMedia('(min-width:1280px)');
+let tab=(fetchStore('clp.tab'))||'plan';
+function setTab(t,scroll){
+  tab=t; store('clp.tab',t);
+  const eff=(!mqPhone.matches&&t==='setup')?'plan':t;
+  document.querySelectorAll('.pane').forEach(p=>p.classList.toggle('active',p.dataset.pane===eff||(!mqPhone.matches&&p.dataset.pane==='setup')));
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',String(b.dataset.tab===eff)));
+  if(scroll&&!mqWide.matches) window.scrollTo({top:0,behavior:'smooth'});
+  if(eff==='plan') requestAnimationFrame(()=>{ if(typeof size3D==='function') size3D(); });
+  if(result){ if(eff==='steps') scheduleThumbs(); if(eff==='report'&&V.fillPending) renderFill(); }
+}
+$('#drawings').addEventListener('toggle',()=>{ if($('#drawings').open&&result) drawViews(); });
+$('#tabbar').addEventListener('click',e=>{ const b=e.target.closest('.tab'); if(b) setTab(b.dataset.tab,true); });
+$('#sumChips').addEventListener('click',e=>{ const b=e.target.closest('[data-go]'); if(!b) return; if(mqWide.matches){ $('[data-pane=report]').scrollTo({top:0,behavior:'smooth'}); } else setTab(b.dataset.go,true); });
+[mqPhone,mqWide].forEach(m=>{ const f=()=>{ setTab(tab); measureHdr(); }; m.addEventListener?m.addEventListener('change',f):m.addListener(f); });
+function measureHdr(){ document.documentElement.style.setProperty('--hdr',$('#appbar').offsetHeight+'px'); }
+new ResizeObserver(measureHdr).observe($('#appbar'));
+function goStep(n){ step=Math.max(1,Math.min(nSteps(),n)); const st=$('#step'); st.value=step; st.dataset.all=step===nSteps()?'1':'0'; drawViews(); }
+$('#step').addEventListener('input',e=>goStep(+e.target.value));
+$('#prevStep').onclick=()=>goStep(step-1); $('#nextStep').onclick=()=>goStep(step+1);
+$('#steps').addEventListener('click',e=>{ const c=e.target.closest('.scard'); if(!c) return; goStep(+c.dataset.step); if(mqWide.matches) $('#viewer').scrollIntoView({behavior:'smooth',block:'center'}); else setTab('plan',true); });
+document.querySelectorAll('.vbtn').forEach(b=>b.onclick=()=>{ document.querySelectorAll('.vbtn').forEach(x=>x.setAttribute('aria-pressed',String(x===b))); setCam(b.dataset.cam); });
+$('#planName').addEventListener('input',e=>{ state.planName=e.target.value; store('clp.draft',state); });
+
+/* ---------- save / export ---------- */
+function toast(m){ const t=$('#toast'); t.textContent=m; t.hidden=false; clearTimeout(toast.t); toast.t=setTimeout(()=>t.hidden=true,2600); }
+function getPlans(){ return fetchStore('clp.plans')||[]; }
+function renderPlans(){
+  const plans=getPlans();
+  $('#plans').innerHTML=plans.length?plans.map((p,i)=>`<li><span><b style="font-weight:500">${esc(p.name)}</b><br><span class="meta">${esc(PRESETS[p.state.ctype]?.label||'Custom')} · ${p.state.items.length} item types · saved ${new Date(p.saved).toLocaleString()}</span></span><span class="row" style="gap:4px"><button class="btn" data-load="${i}" type="button">Open</button><button class="btn ghost danger" data-del="${i}" type="button">Delete</button></span></li>`).join(''):'<li class="hint" style="border:0;padding:0">No saved plans on this device yet.</li>';
+}
+$('#savePlan').onclick=()=>{
+  const name=(state.planName||'').trim()||('Plan '+new Date().toLocaleDateString());
+  const plans=getPlans(); const ix=plans.findIndex(p=>p.name===name); const rec={name,saved:Date.now(),state:JSON.parse(JSON.stringify(state))};
+  if(ix>=0) plans[ix]=rec; else plans.unshift(rec);
+  store('clp.plans',plans); renderPlans(); toast(ix>=0?'Updated "'+name+'"':'Saved "'+name+'"');
+};
+$('#plans').addEventListener('click',e=>{
+  const plans=getPlans();
+  if(e.target.dataset.load!==undefined){ applyState(plans[+e.target.dataset.load].state); toast('Opened "'+plans[+e.target.dataset.load].name+'"'); }
+  else if(e.target.dataset.del!==undefined){
+    const b=e.target; if(b.dataset.armed!=='1'){ b.dataset.armed='1'; b.textContent='Confirm delete'; setTimeout(()=>{b.dataset.armed='';b.textContent='Delete';},3000); return; }
+    const n=plans.splice(+b.dataset.del,1)[0]; store('clp.plans',plans); renderPlans(); toast('Deleted "'+n.name+'"');
+  }
+});
+function applyState(s){
+  if(!s||!s.c||!Array.isArray(s.items)) throw new Error('bad');
+  state=JSON.parse(JSON.stringify(s)); state.example=false;
+  if(state.ctype!=='CUSTOM'&&PRESETS[state.ctype]){ const p=PRESETS[state.ctype]; Object.assign(state.c,{L:p.L,W:p.W,H:p.H,doorW:p.doorW,doorH:p.doorH}); }
+  state.items.forEach((it,i)=>{ it.id='i'+(uid++); if(!it.color) it.color=COLORS[i%COLORS.length]; ['l','w','h','kg','qty','maxTop'].forEach(k=>it[k]=num(it[k])); });
+  $('#planName').value=state.planName||''; step=1; $('#step').dataset.all='1'; renderUnits(); renderContainer(); renderItems(); calc();
+}
+function summaryText(){
+  const r=result,a=an,c=r.c;
+  const L=[]; L.push('CONTAINER LOAD PLAN'+(state.planName?' – '+state.planName:''));
+  L.push('Date: '+new Date().toLocaleDateString());
+  L.push('Loading option: '+(STRATS[r.key]?.name||''));
+  L.push('Container: '+(PRESETS[state.ctype]?.label||'Custom')+' – inside '+[c.L,c.W,c.H].map(v=>r1(lenOut(v))).join(' x ')+' '+LU()+', payload '+fmtW(c.payload));
+  L.push('');
+  L.push('Units loaded: '+r.boxes.length+' / '+a.requested);
+  L.push('Volume used: '+a.volPct.toFixed(1)+'% ('+fmtVolA(a.used)+' of '+fmtVolA(a.vol)+')');
+  L.push('Space left: '+fmtVolA(a.free)+' ('+(a.free/a.vol*100).toFixed(1)+'%), of which '+fmtVolA(a.clearVol)+' clear floor-to-roof ('+fmtPos(a.clearLen)+' of length)');
+  L.push('Payload used: '+a.wtPct.toFixed(1)+'% ('+fmtW(r.total)+' of '+fmtW(c.payload)+')');
+  L.push('Floor length used: '+fmtPos(a.maxX)+'; free at doors '+fmtPos(Math.max(0,a.voidLen)));
+  L.push('Weight split front/doors: '+(r.total?Math.round(a.front/r.total*100):0)+'/'+(r.total?Math.round(a.rear/r.total*100):0)+'; left/right: '+(r.total?Math.round(a.leftSide/r.total*100):0)+'/'+(r.total?Math.round(a.rightSide/r.total*100):0));
+  const w=warnings(r,a).filter(x=>x[0]!=='ok');
+  if(w.length){ L.push(''); L.push('WARNINGS'); w.forEach(x=>L.push('! '+x[1]+': '+x[2].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"').replace(/&lt;/g,'<').replace(/&gt;/g,'>'))); }
+  L.push(''); L.push('CARGO');
+  state.items.filter(validItem).forEach(it=>{ const n=r.boxes.filter(b=>b.it.id===it.id).length; L.push('- '+(it.name||'Unnamed')+': '+[it.l,it.w,it.h].map(v=>r1(lenOut(v))).join(' x ')+' '+LU()+', '+fmtW(it.kg)+' each, qty '+it.qty+', loaded '+n+(it.qty-n?', LEFT OVER '+(it.qty-n):'')+', '+(it.stack?'stackable'+(it.maxTop?' (max '+fmtW(it.maxTop)+' on top)':''):'do not stack')+', '+({fixed:'fixed orientation',floor:'this side up',any:'any orientation'}[it.rot])); });
+  L.push(''); L.push('LOADING SEQUENCE (front wall to doors, bottom layer first)');
+  r.rows.forEach((row,i)=>{ const by=new Map(); row.boxes.forEach(b=>{const e=by.get(b.it.id)||{it:b.it,f:0,u:0};b.z<E?e.f++:e.u++;by.set(b.it.id,e)}); L.push((i+1)+'. Units '+row.boxes[0].seq+'-'+row.boxes[row.boxes.length-1].seq+', '+fmtPos(row.start)+' to '+fmtPos(row.end)+': '+[...by.values()].map(e=>(e.f+e.u)+' x '+(e.it.name||'Unnamed')+' ('+e.f+' floor'+(e.u?', '+e.u+' stacked':'')+')').join('; ')); });
+  return L.join('\n');
+}
+$('#copyBtn').onclick=async()=>{
+  const txt=summaryText(); $('#copyFallback').innerHTML='';
+  try{ await navigator.clipboard.writeText(txt); toast('Summary copied'); }
+  catch(e){ $('#copyFallback').innerHTML='<textarea class="copyfallback" id="cf" readonly></textarea><div class="hint">Copy was blocked here. The text is selected; copy it manually.</div>'; const ta=$('#cf'); ta.value=txt; ta.focus(); ta.select(); }
+};
+let downloads=null;
+function updateExportUI(){
+  const ok=!!downloads; const pdfOk=ok&&!!(window.jspdf&&window.jspdf.jsPDF);
+  $('#pdfBtn').disabled=!pdfOk; $('#jsonBtn').disabled=!ok;
+  $('#exportNote').textContent=ok?(pdfOk?'PDF includes the summary, warnings, top and side views, cargo list and loading sequence. The plan file can be imported on another device.':'PDF export could not load in this view. Use Copy summary or the plan file.'):'File downloads are not available in this view. Use Copy summary instead.';
+}
+const nativeDownloads={ save({filename,data}){ const blob=data instanceof Blob?data:new Blob([data],{type:filename.endsWith('.json')?'application/json':'application/octet-stream'}); const url=URL.createObjectURL(blob); const a=document.createElement('a'); a.href=url; a.download=filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(url),4000); return Promise.resolve(); } };
+(async()=>{ try{ downloads=(window.claude&&window.claude.use)?await window.claude.use('downloads'):nativeDownloads; }catch(e){ downloads=nativeDownloads; } updateExportUI(); })();
+updateExportUI();
+function fileBase(){ return ((state.planName||'load-plan').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-')||'load-plan'); }
+async function save(filename,data){
+  try{ await downloads.save({filename,data}); toast('Saved '+filename); }
+  catch(err){ const code=err&&err.code; if(code==='declined') return; if(code==='rate_limited'){toast('A save is already waiting for your answer');return;} if(['unavailable','not_granted','capability_disabled','capability_removed'].includes(code)){downloads=null;updateExportUI();} toast('Could not save the file'+(err&&err.message?': '+err.message:'')); }
+}
+$('#jsonBtn').onclick=()=>{ if(!downloads) return; save(fileBase()+'.json',JSON.stringify({app:'container-load-planner',version:1,state},null,2)); };
+$('#importFile').addEventListener('change',e=>{
+  const f=e.target.files[0]; if(!f) return; const rd=new FileReader();
+  rd.onload=()=>{ try{ const j=JSON.parse(rd.result); applyState(j.state||j); toast('Plan imported'); }catch(err){ toast('This file is not a load plan exported from this tool'); } e.target.value=''; };
+  rd.readAsText(f);
+});
+function svgToPng(svg,w,h){
+  return new Promise((res,rej)=>{ const img=new Image(); const url=URL.createObjectURL(new Blob([svg],{type:'image/svg+xml'}));
+    img.onload=()=>{ const cv=document.createElement('canvas'); cv.width=w; cv.height=h; const x=cv.getContext('2d'); x.fillStyle='#fff'; x.fillRect(0,0,w,h); x.drawImage(img,0,0,w,h); URL.revokeObjectURL(url); res(cv.toDataURL('image/png')); };
+    img.onerror=e=>{URL.revokeObjectURL(url);rej(e)}; img.src=url; });
+}
+$('#pdfBtn').onclick=async()=>{
+  if(!downloads||!window.jspdf) return;
+  const btn=$('#pdfBtn'); btn.disabled=true; btn.textContent='Building PDF…';
+  try{
+    const r=result,a=an,c=r.c,all=r.boxes.length;
+    const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'landscape',unit:'mm',format:'a4'});
+    const PW=297,PH=210,m=12,cw=PW-2*m; let y=m;
+    const clean=s=>String(s).replace(/[–—]/g,'-').replace(/×/g,'x').replace(/³/g,'3').replace(/²/g,'2').replace(/[^\x20-\x7E -ÿ]/g,'');
+    const line=(t,size,bold,col)=>{ doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(size); doc.setTextColor(...(col||[21,33,42])); const ls=doc.splitTextToSize(clean(t),cw); ls.forEach(l=>{ if(y>PH-m){doc.addPage();y=m;} doc.text(l,m,y); y+=size*0.42; }); };
+    line('Container load plan'+(state.planName?' - '+state.planName:''),16,true); y+=1;
+    line(new Date().toLocaleDateString()+'  |  '+(PRESETS[state.ctype]?.label||'Custom')+'  |  inside '+[c.L,c.W,c.H].map(v=>r1(lenOut(v))).join(' x ')+' '+LU()+'  |  door '+r1(lenOut(c.doorW))+' x '+r1(lenOut(c.doorH))+' '+LU()+'  |  payload '+fmtW(c.payload),9,false,[85,99,111]); y+=2;
+    line('Loading option: '+(STRATS[r.key]?.name||''),10,true);
+    line('Units loaded '+all+' / '+a.requested+'     Volume used '+a.volPct.toFixed(1)+'%     Space left '+fmtVolA(a.free)+' ('+fmtVolA(a.clearVol)+' clear)     Payload used '+a.wtPct.toFixed(1)+'% ('+fmtW(r.total)+')     Floor length used '+fmtPos(a.maxX)+'     Front/doors '+(r.total?Math.round(a.front/r.total*100):0)+'/'+(r.total?Math.round(a.rear/r.total*100):0)+'     Left/right '+(r.total?Math.round(a.leftSide/r.total*100):0)+'/'+(r.total?Math.round(a.rightSide/r.total*100):0),10,true); y+=2;
+    const w=warnings(r,a).filter(x=>x[0]!=='ok');
+    w.forEach(x=>line('! '+x[1]+': '+x[2].replace(/<[^>]+>/g,'').replace(/&amp;/g,'&').replace(/&#39;/g,"'").replace(/&quot;/g,'"'),9,false,x[0]==='bad'?[176,38,29]:(x[0]==='warn'?[147,96,15]:[13,88,118])));
+    y+=2;
+    const S=3;
+    const top=drawTop(r,a,all,PAL_PRINT), side=drawSide(r,a,all,PAL_PRINT);
+    const tf=frame(c,c.W), sf=frame(c,c.H);
+    const timg=await svgToPng(top,Math.round(tf.vw*S/2),Math.round(tf.vh*S/2)); const simg=await svgToPng(side,Math.round(sf.vw*S/2),Math.round(sf.vh*S/2));
+    let th=cw*tf.vh/tf.vw, sh=cw*sf.vh/sf.vw; const avail=PH-m-y-12; let scale=Math.min(1,avail/(th+sh)); let iw=cw*scale;
+    th*=scale; sh*=scale;
+    const ov=snapshot3D('#ffffff',1400,560);
+    if(ov){ const oh=Math.min(70,avail*0.45); doc.addPage(); y=m; line('3D overview',13,true); y+=1; doc.addImage(ov,'JPEG',m,y,oh*2.5,oh); y+=oh+6; th=Math.min(th,(PH-m-y-14)*tf.vh/(tf.vh+sf.vh)); sh=th*sf.vh/tf.vh; iw=th*tf.vw/tf.vh; }
+    line('Top view (numbers = loading order)',9,true); doc.addImage(timg,'PNG',m,y,iw,th); y+=th+5;
+    line('Side view (from left side)',9,true); doc.addImage(simg,'PNG',m,y,iw,sh); y+=sh+2;
+    // legend
+    let lx=m; doc.setFontSize(8); state.items.filter(validItem).forEach(it=>{ const hx=it.color.replace('#',''); doc.setFillColor(parseInt(hx.slice(0,2),16),parseInt(hx.slice(2,4),16),parseInt(hx.slice(4,6),16)); if(lx>PW-m-40){lx=m;y+=4;} doc.rect(lx,y-2.4,3,3,'F'); doc.setTextColor(21,33,42); const t=clean(it.name||'Unnamed'); doc.text(t,lx+4,y); lx+=doc.getTextWidth(t)+10; });
+    doc.addPage(); y=m;
+    line('Cargo',13,true); y+=1;
+    const cols=[m,m+90,m+150,m+180,m+200,m+222,m+242]; const hdr=['Item','L x W x H ('+LU()+')','Unit wt','Qty','Loaded','Left','Handling'];
+    doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(85,99,111); hdr.forEach((h,i)=>doc.text(h,cols[i],y)); y+=1.5; doc.setDrawColor(200,208,214); doc.line(m,y,PW-m,y); y+=4;
+    doc.setFont('helvetica','normal'); doc.setTextColor(21,33,42);
+    state.items.filter(validItem).forEach(it=>{ const n=r.boxes.filter(b=>b.it.id===it.id).length; const cells=[clean(it.name||'Unnamed').slice(0,48),[it.l,it.w,it.h].map(v=>r1(lenOut(v))).join(' x '),fmtW(it.kg),String(it.qty),String(n),String(it.qty-n),(it.stack?'Stack':'No stack')+', '+({fixed:'fixed',floor:'side up',any:'any'}[it.rot])]; if(it.qty-n) doc.setTextColor(176,38,29); cells.forEach((t,i)=>doc.text(t,cols[i],y)); doc.setTextColor(21,33,42); y+=5.2; });
+    const thumbs=await makeThumbs('#ffffff',640,400);
+    if(thumbs.length){
+      doc.addPage(); y=m; line('Loading instructions (front wall to doors, bottom layer first)',13,true); y+=2;
+      const per=4, gw=(cw-(per-1)*6)/per, gh=gw*400/640;
+      r.rows.forEach((row,i)=>{
+        if(i>=thumbs.length) return;
+        const col=i%per; if(col===0&&i>0) y+=gh+30; if(y+gh+28>PH-m){ doc.addPage(); y=m; }
+        const x=m+col*(gw+6);
+        doc.setDrawColor(200,208,214); doc.addImage(thumbs[i],'JPEG',x,y,gw,gh); doc.rect(x,y,gw,gh);
+        doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.setTextColor(21,33,42); doc.text('Step '+(i+1),x,y+gh+5);
+        doc.setFont('helvetica','normal'); doc.setFontSize(7.5); doc.setTextColor(85,99,111); doc.text(clean(fmtPos(row.start)+' - '+fmtPos(row.end)+' from front'),x,y+gh+9);
+        doc.setTextColor(21,33,42);
+        const txt=rowGroups(row).map(e=>(e.floor+e.up)+' x '+(e.it.name||'Unnamed')+' ('+e.floor+' floor'+(e.up?', '+e.up+' stacked':'')+')'+(e.turned?', turned':'')+(e.side?', on side':'')).join('; ');
+        const ls=doc.splitTextToSize(clean(txt),gw).slice(0,4); ls.forEach((l,k)=>doc.text(l,x,y+gh+13+k*3.4));
+      });
+      doc.addPage(); y=m;
+    } else y+=4;
+    line('Loading sequence (front wall to doors, bottom layer first)',13,true); y+=1;
+    r.rows.forEach((row,i)=>{ const by=new Map(); row.boxes.forEach(b=>{const e=by.get(b.it.id)||{it:b.it,f:0,u:0};b.z<E?e.f++:e.u++;by.set(b.it.id,e)}); line((i+1)+'.  Units '+row.boxes[0].seq+'-'+row.boxes[row.boxes.length-1].seq+'  |  '+fmtPos(row.start)+' to '+fmtPos(row.end)+' from front wall  |  '+[...by.values()].map(e=>(e.f+e.u)+' x '+(e.it.name||'Unnamed')+' ('+e.f+' floor'+(e.u?', '+e.u+' stacked':'')+')').join('; '),9.5,false); y+=1; });
+    y+=3; line('Planning estimate. Verify gross weights, CSC plate payload and road limits; secure all voids before sealing.',8,false,[85,99,111]);
+    const pages=doc.getNumberOfPages(); for(let p=1;p<=pages;p++){ doc.setPage(p); doc.setFontSize(8); doc.setTextColor(120,130,140); doc.text('Page '+p+' of '+pages,PW-m,PH-6,{align:'right'}); }
+    await save(fileBase()+'.pdf',doc.output('blob'));
+  }catch(err){ toast('Could not build the PDF'); }
+  finally{ btn.textContent='Download PDF'; updateExportUI(); }
+};
+
+/* ---------- init ---------- */
+if(state.ctype!=='CUSTOM'&&PRESETS[state.ctype]){ const p=PRESETS[state.ctype]; Object.assign(state.c,{L:p.L,W:p.W,H:p.H,doorW:p.doorW,doorH:p.doorH}); }
+$('#planName').value=state.planName||'';
+$('#step').dataset.all='1';
+setTab(tab); measureHdr();
+init3D();
+renderUnits(); renderContainer(); renderItems(); renderPlans(); calc();
+})();
+</script>
+<script>
+if('serviceWorker' in navigator && (location.protocol==='https:' || location.hostname==='localhost')){
+  window.addEventListener('load',()=>{ navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+}
+</script>
+</body>
+</html>
