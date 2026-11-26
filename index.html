@@ -261,6 +261,31 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
 .more li{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px}
 .more li span{display:flex;align-items:center;gap:8px;min-width:0}
 .more li b{font:500 13px var(--mono);white-space:nowrap}
+/* ---- box calculator ---- */
+.sheet{position:fixed;inset:0;z-index:50;background:rgba(15,34,56,.38);display:flex;align-items:stretch;justify-content:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
+.sheet-in{background:var(--bg);border-radius:16px;width:100%;max-width:1280px;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(15,34,56,.25)}
+.sheet-head{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:4px solid var(--signal);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.calc-grid{display:grid;grid-template-columns:minmax(280px,380px) minmax(0,1fr);gap:14px;padding:14px 16px 20px;align-items:start}
+@media (max-width:820px){.calc-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:759px){.sheet{padding:0}.sheet-in{border-radius:0}}
+.calc-in,.calc-out{display:flex;flex-direction:column;gap:14px;min-width:0}
+.ccards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:10px}
+.ccard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.ccard.best{border-color:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
+.ccard .ct{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}
+.ccard .ct b{font:700 17px var(--display);letter-spacing:.03em}
+.ccard .big{font:500 30px var(--mono);font-variant-numeric:tabular-nums;line-height:1.05}
+.ccard .big small{font:400 13px var(--body);color:var(--muted)}
+.ccard dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;margin:0;font-size:12px}
+.ccard dt{color:var(--muted)} .ccard dd{margin:0;font:500 12px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.ccard .lim{font-size:12px;padding:4px 8px;border-radius:6px;background:var(--sunk);color:var(--muted)}
+.ccard .lim.w{background:var(--warn-soft);color:var(--warn)}
+.ccard .na{color:var(--muted);font-size:13px}
+.pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:14px}
+.pic{display:flex;flex-direction:column;gap:6px;min-width:0}
+.pic svg{width:100%;height:auto;display:block;background:var(--sunk);border-radius:8px}
+.pic .cap{font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.calcbtn{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:6px 12px;font:600 12px var(--body);cursor:pointer;white-space:nowrap;flex:none}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -276,6 +301,7 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
       </div>
     </div>
     <div class="sum" id="sumChips" aria-label="Load summary"></div>
+    <button class="calcbtn" id="openCalc" type="button">Box calculator</button>
     <div class="seg" role="group" aria-label="Units">
       <button id="u-metric" type="button">Metric</button>
       <button id="u-imperial" type="button">Imperial</button>
@@ -440,6 +466,53 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
     </section>
   </div>
 </main>
+<div class="sheet" id="calcSheet" hidden>
+  <div class="sheet-in" role="dialog" aria-modal="true" aria-labelledby="h-calc">
+    <div class="sheet-head">
+      <div>
+        <h2 id="h-calc" style="font-size:20px;color:var(--ink);letter-spacing:.03em;text-transform:none">Box calculator</h2>
+        <div class="hint" id="calcCont"></div>
+      </div>
+      <button class="btn" id="calcClose" type="button" aria-label="Close box calculator">✕ Close</button>
+    </div>
+    <div class="calc-grid">
+      <div class="calc-in">
+        <section class="panel">
+          <h2>Box</h2>
+          <div class="fields">
+            <label class="f">Length <span data-lu></span><input id="bxL" type="number" step="any" inputmode="decimal"></label>
+            <label class="f">Width <span data-lu></span><input id="bxW" type="number" step="any" inputmode="decimal"></label>
+            <label class="f">Height <span data-lu></span><input id="bxH" type="number" step="any" inputmode="decimal"></label>
+          </div>
+          <label class="f">Weight per box <span data-wu></span><input id="bxKg" type="number" step="any" inputmode="decimal"></label>
+          <div class="optrow">Orientation<div class="opts" role="group" aria-label="Box orientation">
+            <button class="opt" type="button" data-bxrot="floor">This side up</button>
+            <button class="opt" type="button" data-bxrot="any">Any way</button>
+          </div></div>
+        </section>
+        <section class="panel">
+          <h2>Pallet</h2>
+          <label class="f">Pallet type<select id="plType"></select></label>
+          <div class="fields">
+            <label class="f">Length <span data-lu></span><input id="plL" type="number" step="any" inputmode="decimal"></label>
+            <label class="f">Width <span data-lu></span><input id="plW" type="number" step="any" inputmode="decimal"></label>
+            <label class="f">Pallet height <span data-lu></span><input id="plH" type="number" step="any" inputmode="decimal"></label>
+          </div>
+          <div class="fields">
+            <label class="f">Empty pallet <span data-wu></span><input id="plKg" type="number" step="any" inputmode="decimal"></label>
+            <label class="f">Max height incl. pallet <span data-lu></span><input id="plMaxH" type="number" step="any" inputmode="decimal"></label>
+            <label class="f">Max pallet weight <span data-wu></span><input id="plMaxKg" type="number" step="any" inputmode="decimal"></label>
+          </div>
+          <div class="hint">Boxes stay inside the pallet edges (no overhang). Max weight is the gross weight of one loaded pallet.</div>
+        </section>
+      </div>
+      <div class="calc-out">
+        <div class="ccards" id="calcCards"></div>
+        <section class="panel" id="calcPics"></section>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden role="status"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -1222,6 +1295,134 @@ function nextColor(){ const used=new Set(state.items.map(i=>i.color)); return CO
 $('#addItem').onclick=()=>{ const it=mkItem({},0); it.color=nextColor(); state.items.push(it); openItems.add(it.id); renderItems(); const el=document.getElementById('n-'+it.id); if(el) el.focus(); schedule(); };
 let clearArmed=false;
 $('#clearItems').onclick=e=>{ if(!state.items.length) return; if(!clearArmed){ clearArmed=true; e.target.textContent='Tap again to clear'; setTimeout(()=>{clearArmed=false;e.target.textContent='Clear list';},3000); return; } clearArmed=false; e.target.textContent='Clear list'; state.items=[]; state.example=false; renderItems(); schedule(); };
+/* ---------- box calculator: loose boxes vs pallets ---------- */
+const PALLETS={
+  EUR:{label:'EUR pallet 120 × 80',L:120,W:80,H:14.4,kg:25},
+  IND:{label:'Block pallet 120 × 100',L:120,W:100,H:14.4,kg:30},
+  US:{label:'US pallet 48 × 40 in',L:121.9,W:101.6,H:14.4,kg:22},
+  HALF:{label:'Half EUR pallet 80 × 60',L:80,W:60,H:14.4,kg:10},
+  CUSTOM:{label:'Custom'}
+};
+const CALC_DEF={l:60,w:40,h:40,kg:12,rot:'floor',pt:'EUR',pl:120,pw:80,ph:14.4,pkg:25,maxH:160,maxKg:1000};
+if(!state.calc) state.calc=Object.assign({},CALC_DEF);
+const fx=(len,s)=>s>0?Math.floor((len+E)/s):0;
+/* best way to lay a×b rectangles on an L×W area: straight grid or two blocks with the second block turned 90° */
+function best2D(L,W,a,b){
+  let best={n:0,parts:[]};
+  const consider=(n,parts)=>{ if(n>best.n) best={n,parts}; };
+  for(const [p,q] of [[a,b],[b,a]]){
+    const nx=fx(L,p), ny=fx(W,q);
+    consider(nx*ny,[[0,0,L,W,p,q]]);
+    for(let i=1;i<nx;i++){ const rest=L-i*p; consider(i*ny+fx(rest,q)*fx(W,p),[[0,0,i*p,W,p,q],[i*p,0,rest,W,q,p]]); }
+    for(let j=1;j<ny;j++){ const rest=W-j*q; consider(nx*j+fx(L,q)*fx(rest,p),[[0,0,L,j*q,p,q],[0,j*q,L,rest,q,p]]); }
+  }
+  best.rects=()=>{ const out=[]; for(const [x0,y0,Ld,Wd,p,q] of best.parts){ const nx=fx(Ld,p), ny=fx(Wd,q); for(let i=0;i<nx;i++) for(let j=0;j<ny;j++) out.push({x:x0+i*p,y:y0+j*q,l:p,w:q}); } return out; };
+  return best;
+}
+function boxUprights(k){ const {l,w,h}=k; const o=[[l,w,h]]; if(k.rot==='any') o.push([l,h,w],[w,h,l]); return o; } /* [footprint a, footprint b, height] */
+function calcLoose(k,c){
+  let best=null;
+  for(const [a,b,h] of boxUprights(k)){
+    const pat=best2D(c.L,c.W,a,b), layers=fx(c.H,h); let n=pat.n*layers, top=0;
+    const gap=c.H-layers*h;
+    if(k.rot==='any') for(const [a2,b2,h2] of boxUprights(k)){ if(h2<=gap+E){ const t=best2D(c.L,c.W,a2,b2).n*fx(gap,h2); if(t>top) top=t; } }
+    n+=top;
+    if(!best||n>best.n) best={n,pat,layers,top,h,a,b};
+  }
+  if(!best||!best.n) return null;
+  const byW=k.kg>0?fx(c.payload,k.kg):Infinity;
+  const n=Math.min(best.n,byW);
+  return Object.assign(best,{n,space:best.n,limit:n<best.n?'payload':'space'});
+}
+function calcPallets(k,c,tiers){
+  const maxUnitH=Math.min(k.maxH,c.doorH,tiers===2?c.H/2-1:c.H);
+  let best=null;
+  for(const [a,b,h] of boxUprights(k)){
+    const pat=best2D(k.pl,k.pw,a,b); const layers=fx(maxUnitH-k.ph,h); let per=pat.n*layers;
+    const perW=k.kg>0?fx(k.maxKg-k.pkg,k.kg):Infinity; let capped=false;
+    if(per>perW){ per=Math.max(0,perW); capped=true; }
+    if(per<=0) continue;
+    const usedLayers=Math.ceil(per/pat.n), unitH=k.ph+usedLayers*h;
+    if(!best||per>best.per||(per===best.per&&unitH<best.unitH)) best={per,pat,layers:usedLayers,h,a,b,unitH,capped};
+  }
+  if(!best) return null;
+  const floor=best2D(c.L,c.W,k.pl,k.pw);
+  if(!floor.n) return null;
+  const gross=k.pkg+best.per*k.kg;
+  let pallets=floor.n*tiers, limit='space';
+  const byW=gross>0?fx(c.payload,gross):Infinity;
+  if(byW<pallets){ pallets=byW; limit='payload'; }
+  return Object.assign(best,{tiers,floor,pallets,gross,n:pallets*best.per,limit,spacePallets:floor.n*tiers});
+}
+function patSVG(L,W,rects,color,label){
+  const pad=Math.max(L,W)*0.02, sw=Math.max(L,W)/300;
+  let s=`<svg viewBox="${-pad} ${-pad} ${L+pad*2} ${W+pad*2}" role="img" aria-label="${esc(label)}"><rect x="0" y="0" width="${L}" height="${W}" style="fill:var(--floor);stroke:var(--ink)" stroke-width="${sw*1.5}"/>`;
+  for(const r of rects.slice(0,1500)) s+=`<rect x="${r.x}" y="${r.y}" width="${r.l}" height="${r.w}" fill="${color}" style="stroke:var(--surface)" stroke-width="${sw}"/>`;
+  return s+'</svg>';
+}
+function readCalc(){
+  const k=state.calc;
+  const v=id=>num($('#'+id).value);
+  k.l=lenIn(v('bxL')); k.w=lenIn(v('bxW')); k.h=lenIn(v('bxH')); k.kg=wtIn(v('bxKg'));
+  k.pl=lenIn(v('plL')); k.pw=lenIn(v('plW')); k.ph=lenIn(v('plH')); k.pkg=wtIn(v('plKg'));
+  k.maxH=lenIn(v('plMaxH')); k.maxKg=wtIn(v('plMaxKg'));
+}
+function fillCalcInputs(){
+  const k=state.calc, set=(id,val)=>{ $('#'+id).value=val?r1(val):''; };
+  set('bxL',lenOut(k.l)); set('bxW',lenOut(k.w)); set('bxH',lenOut(k.h)); set('bxKg',wtOut(k.kg));
+  $('#plType').innerHTML=Object.entries(PALLETS).map(([key,p])=>`<option value="${key}">${p.label}</option>`).join(''); $('#plType').value=k.pt;
+  set('plL',lenOut(k.pl)); set('plW',lenOut(k.pw)); set('plH',lenOut(k.ph)); set('plKg',wtOut(k.pkg)); set('plMaxH',lenOut(k.maxH)); set('plMaxKg',wtOut(k.maxKg));
+  document.querySelectorAll('[data-bxrot]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.bxrot===k.rot)));
+}
+let calcRes={};
+function renderCalc(){
+  const k=state.calc, c=state.c;
+  $('#calcCont').textContent=(PRESETS[state.ctype]?.label||'Custom container')+' · inside '+[c.L,c.W,c.H].map(v=>r1(lenOut(v))).join(' × ')+' '+LU()+' · payload '+fmtW(c.payload)+' (change in Setup)';
+  const ok=k.l>0&&k.w>0&&k.h>0;
+  const loose=ok?calcLoose(k,c):null;
+  const p1=ok&&k.pl>0&&k.pw>0?calcPallets(k,c,1):null;
+  const p2=ok&&k.pl>0&&k.pw>0&&c.H/2-1>=k.ph+k.h?calcPallets(k,c,2):null;
+  calcRes={loose,p1,p2};
+  const boxV=k.l*k.w*k.h, cV=c.L*c.W*c.H;
+  const bestN=Math.max(loose?.n||0,p1?.n||0,p2?.n||0);
+  const limTxt=(r,unit)=>r.limit==='payload'?`<div class="lim w">Limited by payload. Space allows ${(unit==='p'?r.spacePallets*r.per:r.space).toLocaleString('en-US')} boxes.</div>`:`<div class="lim">Limited by space</div>`;
+  const card=(title,r,body,key)=>`<div class="ccard${r&&r.n===bestN&&bestN>0?' best':''}"><div class="ct"><b>${title}</b>${r&&r.n===bestN&&bestN>0?'<span class="ist ok">Most boxes</span>':''}</div>${r?body:'<div class="na">'+(key==='p2'?'Two pallets do not fit on top of each other in this container.':'Enter box and pallet sizes.')+'</div>'}${r?`<button class="btn" type="button" data-calcadd="${key}">Add to cargo list</button>`:''}</div>`;
+  const pct=n=>(n*boxV/cV*100).toFixed(0)+'%';
+  const looseBody=loose&&`<div class="big">${loose.n.toLocaleString('en-US')} <small>boxes</small></div><dl>
+    <dt>Per layer on floor</dt><dd>${loose.pat.n}</dd><dt>Layers high</dt><dd>${loose.layers}${loose.top?' + top '+loose.top:''}</dd>
+    <dt>Weight</dt><dd>${fmtW(loose.n*k.kg)}</dd><dt>Volume used</dt><dd>${pct(loose.n)} · ${fmtVol(loose.n*boxV)}</dd></dl>${limTxt(loose,'b')}`;
+  const palBody=r=>r&&`<div class="big">${r.n.toLocaleString('en-US')} <small>boxes</small></div><dl>
+    <dt>Pallets</dt><dd>${r.pallets}${r.tiers===2?' ('+r.floor.n+' × 2 high)':''}</dd><dt>Boxes per pallet</dt><dd>${r.per} (${r.pat.n} × ${r.layers} layers)</dd>
+    <dt>Pallet height</dt><dd>${r1(lenOut(r.unitH))} ${LU()}</dd><dt>Pallet gross weight</dt><dd>${fmtW(r.gross)}</dd>
+    <dt>Total weight</dt><dd>${fmtW(r.pallets*r.gross)}</dd><dt>Box volume used</dt><dd>${pct(r.n)} · ${fmtVol(r.n*boxV)}</dd></dl>${r.capped?'<div class="lim w">Boxes per pallet limited by max pallet weight</div>':''}${limTxt(r,'p')}`;
+  $('#calcCards').innerHTML=card('Loose boxes',loose,looseBody,'loose')+card('On pallets · 1 high',p1,palBody(p1),'p1')+card('On pallets · 2 high',p2,palBody(p2),'p2');
+  const col=COLORS[0], pcol=COLORS[1];
+  let pics='';
+  if(loose) pics+=`<div class="pic"><span class="cap">Loose: floor layer (${loose.pat.n} boxes)</span>${patSVG(c.L,c.W,loose.pat.rects(),col,'Floor layer of loose boxes')}</div>`;
+  const pr=p2||p1;
+  if(p1) pics+=`<div class="pic"><span class="cap">One pallet layer (${p1.pat.n} boxes)</span>${patSVG(k.pl,k.pw,p1.pat.rects(),col,'Boxes on one pallet layer')}</div>`;
+  if(pr) pics+=`<div class="pic"><span class="cap">Pallets on the floor (${pr.floor.n})</span>${patSVG(c.L,c.W,pr.floor.rects(),pcol,'Pallets on the container floor')}</div>`;
+  $('#calcPics').innerHTML=pics?`<h2>Patterns · top view, front wall on the left</h2><div class="pics">${pics}</div><div class="hint">Quick check using straight and mixed (turned) patterns. The full 3D plan can still place a few more or fewer units; use Add to cargo list to check it there.</div>`:'<div class="hint">Enter a box size to see the patterns.</div>';
+  store('clp.draft',state);
+}
+function openCalc(){ if(!state.calc) state.calc=Object.assign({},CALC_DEF); fillCalcInputs(); renderUnits(); renderCalc(); $('#calcSheet').hidden=false; document.body.style.overflow='hidden'; $('#bxL').focus(); }
+function closeCalc(){ $('#calcSheet').hidden=true; document.body.style.overflow=''; $('#openCalc').focus(); }
+$('#openCalc').onclick=openCalc; $('#calcClose').onclick=closeCalc;
+$('#calcSheet').addEventListener('click',e=>{ if(e.target===$('#calcSheet')) closeCalc(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('#calcSheet').hidden) closeCalc(); });
+let calcT=null;
+$('#calcSheet').addEventListener('input',e=>{ if(e.target.id==='plType') return; if(e.target.id&&/^(pl[LWH]|plKg)$/.test(e.target.id)){ state.calc.pt='CUSTOM'; $('#plType').value='CUSTOM'; } readCalc(); clearTimeout(calcT); calcT=setTimeout(renderCalc,120); });
+$('#plType').addEventListener('change',e=>{ const k=state.calc, p=PALLETS[e.target.value]; k.pt=e.target.value; if(p&&p.L){ k.pl=p.L; k.pw=p.W; k.ph=p.H; k.pkg=p.kg; } fillCalcInputs(); renderCalc(); });
+$('#calcSheet').addEventListener('click',e=>{
+  const rb=e.target.closest('[data-bxrot]'); if(rb){ state.calc.rot=rb.dataset.bxrot; fillCalcInputs(); renderCalc(); return; }
+  const ab=e.target.closest('[data-calcadd]'); if(!ab) return;
+  const k=state.calc, key=ab.dataset.calcadd, r=calcRes[key]; if(!r) return;
+  let it;
+  if(key==='loose') it=mkItem({name:`Box ${[k.l,k.w,k.h].map(v=>r1(lenOut(v))).join('×')}`,l:k.l,w:k.w,h:k.h,kg:k.kg,qty:r.n,stack:true,maxTop:0,rot:k.rot},0);
+  else it=mkItem({name:`Pallet ${r.per} boxes`,l:k.pl,w:k.pw,h:r.unitH,kg:r.gross,qty:r.pallets,stack:r.tiers===2,maxTop:r.tiers===2?r.gross:0,rot:'floor'},0);
+  it.color=nextColor(); state.items.push(it); exampleOff(); renderItems(); schedule(); closeCalc();
+  toast(`Added ${it.qty} × ${it.name} to the cargo list`);
+});
 /* ---------- panes / tabs ---------- */
 const mqPhone=window.matchMedia('(max-width:759px)'), mqWide=window.matchMedia('(min-width:1280px)');
 let tab=(fetchStore('clp.tab'))||'plan';

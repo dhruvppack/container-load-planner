@@ -9,6 +9,7 @@ Plan an export container load before it happens: choose the container, enter the
 - a 3D load plan you can step through, plus top and side drawings
 - step-by-step loading instructions with pictures
 - PDF export, copyable summary, and plan files you can move between devices
+- a box calculator: how many boxes fit loose, on pallets one high, or on pallets two high (EUR, block, US, half EUR or custom pallets)
 
 Containers: 20' GP, 40' GP, 40' HC, 45' HC and custom sizes. Metric by default, imperial optional.
 
