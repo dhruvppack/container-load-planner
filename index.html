@@ -261,7 +261,7 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
 .more li{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:13px}
 .more li span{display:flex;align-items:center;gap:8px;min-width:0}
 .more li b{font:500 13px var(--mono);white-space:nowrap}
-/* ---- box calculator ---- */
+/* ---- pallet loading planner ---- */
 .sheet{position:fixed;inset:0;z-index:50;background:rgba(15,34,56,.38);display:flex;align-items:stretch;justify-content:center;padding:max(12px,env(safe-area-inset-top,0px)) max(12px,env(safe-area-inset-right,0px)) max(12px,env(safe-area-inset-bottom,0px)) max(12px,env(safe-area-inset-left,0px))}
 .sheet-in{background:var(--bg);border-radius:16px;width:100%;max-width:1280px;overflow:auto;overscroll-behavior:contain;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(15,34,56,.25)}
 .sheet-head{position:sticky;top:0;z-index:2;background:var(--surface);border-bottom:4px solid var(--signal);padding:12px 16px;display:flex;justify-content:space-between;align-items:center;gap:12px}
@@ -269,26 +269,22 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
 @media (max-width:820px){.calc-grid{grid-template-columns:minmax(0,1fr)}}
 @media (max-width:759px){.sheet{padding:0}.sheet-in{border-radius:0}}
 .calc-in,.calc-out{display:flex;flex-direction:column;gap:14px;min-width:0}
-.ccards{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:10px}
-.ccard{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:8px;min-width:0}
-.ccard.best{border-color:var(--ok);box-shadow:0 0 0 3px var(--ok-soft)}
-.ccard .ct{display:flex;justify-content:space-between;align-items:flex-start;gap:6px}
-.ccard .ct b{font:700 17px var(--display);letter-spacing:.03em}
-.ccard .big{font:500 30px var(--mono);font-variant-numeric:tabular-nums;line-height:1.05}
-.ccard .big small{font:400 13px var(--body);color:var(--muted)}
-.ccard dl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 10px;margin:0;font-size:12px}
-.ccard dt{color:var(--muted)} .ccard dd{margin:0;font:500 12px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
-.ccard .lim{font-size:12px;padding:4px 8px;border-radius:6px;background:var(--sunk);color:var(--muted)}
-.ccard .lim.w{background:var(--warn-soft);color:var(--warn)}
-.ccard .na{color:var(--muted);font-size:13px}
 .pics{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,240px),1fr));gap:14px}
 .pic{display:flex;flex-direction:column;gap:6px;min-width:0}
 .pic svg{width:100%;height:auto;display:block;background:var(--sunk);border-radius:8px}
 .pic .cap{font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.v3d.c3d{height:clamp(280px,44vw,480px)}
-.ccard{cursor:pointer}
-.ccard.viewing{outline:3px solid var(--accent);outline-offset:-1px}
-.ccard.viewing .ct b::after{content:' · in 3D';color:var(--accent);font-weight:600}
+.v3d.c3d{height:clamp(300px,46vw,500px)}
+.ppsum{display:flex;flex-direction:column;gap:12px}
+.ppbig,.ship{display:flex;flex-direction:column;gap:2px;padding:12px 14px;border-radius:10px;background:var(--signal-soft)}
+.ship{background:var(--accent-soft)}
+.ppbig>div,.ship>div:first-child{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.ppbig .k,.ship .k{font:600 13px var(--display);letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.ppbig b{font:500 40px var(--mono);font-variant-numeric:tabular-nums;line-height:1}
+.ship b{font:500 28px var(--mono);font-variant-numeric:tabular-nums;line-height:1}
+.ppdl{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 14px;margin:0;font-size:13px}
+.ppdl dt{color:var(--muted)} .ppdl dd{margin:0;font:500 13px var(--mono);text-align:right;font-variant-numeric:tabular-nums}
+.lim{font-size:12px;padding:5px 9px;border-radius:6px;background:var(--sunk);color:var(--muted)}
+.lim.w{background:var(--warn-soft);color:var(--warn)}
 .calcbtn{border:1px solid var(--accent);background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:6px 12px;font:600 12px var(--body);cursor:pointer;white-space:nowrap;flex:none}
 @media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -305,7 +301,7 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
       </div>
     </div>
     <div class="sum" id="sumChips" aria-label="Load summary"></div>
-    <button class="calcbtn" id="openCalc" type="button">Box calculator</button>
+    <button class="calcbtn" id="openCalc" type="button">Pallet planner</button>
     <div class="seg" role="group" aria-label="Units">
       <button id="u-metric" type="button">Metric</button>
       <button id="u-imperial" type="button">Imperial</button>
@@ -474,10 +470,10 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
   <div class="sheet-in" role="dialog" aria-modal="true" aria-labelledby="h-calc">
     <div class="sheet-head">
       <div>
-        <h2 id="h-calc" style="font-size:20px;color:var(--ink);letter-spacing:.03em;text-transform:none">Box calculator</h2>
-        <div class="hint" id="calcCont"></div>
+        <h2 id="h-calc" style="font-size:20px;color:var(--ink);letter-spacing:.03em;text-transform:none">Pallet loading planner</h2>
+        <div class="hint">Plan one pallet: layer pattern, layers, height and weight</div>
       </div>
-      <button class="btn" id="calcClose" type="button" aria-label="Close box calculator">✕ Close</button>
+      <button class="btn" id="calcClose" type="button" aria-label="Close pallet loading planner">✕ Close</button>
     </div>
     <div class="calc-grid">
       <div class="calc-in">
@@ -507,34 +503,46 @@ textarea.copyfallback{width:100%;height:160px;font:12px var(--mono);background:v
             <label class="f">Max height incl. pallet <span data-lu></span><input id="plMaxH" type="number" step="any" inputmode="decimal"></label>
             <label class="f">Max pallet weight <span data-wu></span><input id="plMaxKg" type="number" step="any" inputmode="decimal"></label>
           </div>
+          <div class="optrow">Stacking pattern<div class="opts" role="group" aria-label="Stacking pattern">
+            <button class="opt" type="button" data-ppat="column">Column (same every layer)</button>
+            <button class="opt" type="button" data-ppat="interlock">Interlocked (turned every 2nd layer)</button>
+          </div></div>
           <div class="hint">Boxes stay inside the pallet edges (no overhang). Max weight is the gross weight of one loaded pallet.</div>
+        </section>
+        <section class="panel">
+          <h2>Shipment</h2>
+          <div class="fields two">
+            <label class="f">Boxes to ship <span class="hint">(optional)</span><input id="ppShip" type="number" step="1" min="0" inputmode="numeric" placeholder="e.g. 480"></label>
+            <label class="f">Reference<input id="ppRef" type="text" placeholder="e.g. Order 4471"></label>
+          </div>
         </section>
       </div>
       <div class="calc-out">
-        <div class="ccards" id="calcCards"></div>
+        <section class="panel" id="ppSummary"></section>
         <section class="panel" id="c3dWrap">
-          <div class="row between">
-            <h2>3D view · one container</h2>
-            <div class="opts" role="group" aria-label="Which result to show">
-              <button class="opt" type="button" data-c3d="loose">Loose</button>
-              <button class="opt" type="button" data-c3d="p1">Pallets 1 high</button>
-              <button class="opt" type="button" data-c3d="p2">Pallets 2 high</button>
-            </div>
-          </div>
+          <div class="row between"><h2>3D view · one pallet</h2><span class="hint" id="c3dNote"></span></div>
           <div class="viewer" id="c3dBox">
-            <div class="v3d c3d" id="c3d" aria-label="3D view of the container filled with boxes. Drag to rotate, pinch or scroll to zoom."></div>
+            <div class="v3d c3d" id="c3d" aria-label="3D view of the loaded pallet. Drag to rotate, pinch or scroll to zoom."></div>
             <div class="vtools" role="group" aria-label="Camera">
               <button class="vbtn" data-ccam="iso" type="button">3D</button>
               <button class="vbtn" data-ccam="top" type="button">Top</button>
               <button class="vbtn" data-ccam="side" type="button">Side</button>
-              <button class="vbtn" data-ccam="doors" type="button">From doors</button>
+              <button class="vbtn" data-ccam="front" type="button">Front</button>
             </div>
             <div class="vhint">Drag to rotate · pinch to zoom · two fingers to pan</div>
           </div>
-          <div class="vfail" id="c3dFail" hidden>The 3D view could not load here. The patterns below show the same result.</div>
-          <div class="hint" id="c3dNote"></div>
+          <div class="vfail" id="c3dFail" hidden>The 3D view could not load here. The layer patterns below show the same plan.</div>
         </section>
         <section class="panel" id="calcPics"></section>
+        <section class="panel">
+          <h2>Export</h2>
+          <div class="exports">
+            <button class="btn primary" id="ppPdf" type="button">Download PDF</button>
+            <button class="btn" id="ppCopy" type="button">Copy summary</button>
+            <button class="btn" id="ppAdd" type="button" style="grid-column:1/-1">Add these pallets to the container cargo list</button>
+          </div>
+          <div id="ppCopyFallback"></div>
+        </section>
       </div>
     </div>
   </div>
@@ -1321,7 +1329,7 @@ function nextColor(){ const used=new Set(state.items.map(i=>i.color)); return CO
 $('#addItem').onclick=()=>{ const it=mkItem({},0); it.color=nextColor(); state.items.push(it); openItems.add(it.id); renderItems(); const el=document.getElementById('n-'+it.id); if(el) el.focus(); schedule(); };
 let clearArmed=false;
 $('#clearItems').onclick=e=>{ if(!state.items.length) return; if(!clearArmed){ clearArmed=true; e.target.textContent='Tap again to clear'; setTimeout(()=>{clearArmed=false;e.target.textContent='Clear list';},3000); return; } clearArmed=false; e.target.textContent='Clear list'; state.items=[]; state.example=false; renderItems(); schedule(); };
-/* ---------- box calculator: loose boxes vs pallets ---------- */
+/* ---------- pallet loading planner ---------- */
 const PALLETS={
   EUR:{label:'EUR pallet 120 × 80',L:120,W:80,H:14.4,kg:25},
   IND:{label:'Block pallet 120 × 100',L:120,W:100,H:14.4,kg:30},
@@ -1329,208 +1337,258 @@ const PALLETS={
   HALF:{label:'Half EUR pallet 80 × 60',L:80,W:60,H:14.4,kg:10},
   CUSTOM:{label:'Custom'}
 };
-const CALC_DEF={view:'',l:60,w:40,h:40,kg:12,rot:'floor',pt:'EUR',pl:120,pw:80,ph:14.4,pkg:25,maxH:160,maxKg:1000};
-if(!state.calc) state.calc=Object.assign({},CALC_DEF);
+const CALC_DEF={l:60,w:40,h:40,kg:12,rot:'floor',pt:'EUR',pl:120,pw:80,ph:14.4,pkg:25,maxH:160,maxKg:1000,pat:'interlock',ship:0,ref:''};
+function calcState(){ if(!state.calc) state.calc={}; for(const [k,v] of Object.entries(CALC_DEF)) if(state.calc[k]===undefined) state.calc[k]=v; return state.calc; }
+calcState();
 const fx=(len,s)=>s>0?Math.floor((len+E)/s):0;
-/* best way to lay a×b rectangles on an L×W area: straight grid or two blocks with the second block turned 90° */
+/* best way to lay a×b rectangles on an L×W area: guillotine search over all cut positions (covers straight grids, mixed and multi-block patterns) */
 function best2D(L,W,a,b){
-  let best={n:0,parts:[]};
-  const consider=(n,parts)=>{ if(n>best.n) best={n,parts}; };
-  for(const [p,q] of [[a,b],[b,a]]){
-    const nx=fx(L,p), ny=fx(W,q);
-    consider(nx*ny,[[0,0,L,W,p,q]]);
-    for(let i=1;i<nx;i++){ const rest=L-i*p; consider(i*ny+fx(rest,q)*fx(W,p),[[0,0,i*p,W,p,q],[i*p,0,rest,W,q,p]]); }
-    for(let j=1;j<ny;j++){ const rest=W-j*q; consider(nx*j+fx(L,q)*fx(rest,p),[[0,0,L,j*q,p,q],[0,j*q,L,rest,q,p]]); }
+  const raster=M=>{ const s=new Set([0]); for(let i=0;i*a<=M+E;i++) for(let j=0;i*a+j*b<=M+E;j++) s.add(Math.round((i*a+j*b)*1000)/1000); return [...s].sort((x,y)=>x-y); };
+  const XS=raster(L), YS=raster(W);
+  const down=(arr,v)=>{ let lo=0,hi=arr.length-1; while(lo<hi){ const m=(lo+hi+1)>>1; if(arr[m]<=v+E) lo=m; else hi=m-1; } return arr[lo]; };
+  const memo=new Map(), big=XS.length*YS.length>6000;
+  function f(x,y){
+    const key=x+'|'+y; if(memo.has(key)) return memo.get(key);
+    const g1=fx(x,a)*fx(y,b), g2=fx(x,b)*fx(y,a);
+    let best=g1>=g2?{n:g1,t:'g',p:a,q:b}:{n:g2,t:'g',p:b,q:a};
+    if(!big||x===L||y===W){
+      for(const x1 of XS){ if(x1<=0||x1>x/2+E) continue; const x2=down(XS,x-x1); const n=f(x1,y).n+f(x2,y).n; if(n>best.n) best={n,t:'x',c:x1,r:x2}; }
+      for(const y1 of YS){ if(y1<=0||y1>y/2+E) continue; const y2=down(YS,y-y1); const n=f(x,y1).n+f(x,y2).n; if(n>best.n) best={n,t:'y',c:y1,r:y2}; }
+    }
+    memo.set(key,best); return best;
   }
-  best.rects=()=>{ const out=[]; for(const [x0,y0,Ld,Wd,p,q] of best.parts){ const nx=fx(Ld,p), ny=fx(Wd,q); for(let i=0;i<nx;i++) for(let j=0;j<ny;j++) out.push({x:x0+i*p,y:y0+j*q,l:p,w:q}); } return out; };
-  return best;
+  const top=f(L,W);
+  const res={n:top.n};
+  res.rects=()=>{ const out=[];
+    const build=(x0,y0,x,y)=>{ const s=f(x,y);
+      if(s.t==='g'){ const nx=fx(x,s.p), ny=fx(y,s.q); for(let i=0;i<nx;i++) for(let j=0;j<ny;j++) out.push({x:x0+i*s.p,y:y0+j*s.q,l:s.p,w:s.q}); }
+      else if(s.t==='x'){ build(x0,y0,s.c,y); build(x0+s.c,y0,s.r,y); }
+      else { build(x0,y0,x,s.c); build(x0,y0+s.c,x,s.r); } };
+    build(0,0,L,W); return out; };
+  return res;
 }
 function boxUprights(k){ const {l,w,h}=k; const o=[[l,w,h]]; if(k.rot==='any') o.push([l,h,w],[w,h,l]); return o; } /* [footprint a, footprint b, height] */
-function calcLoose(k,c){
+function calcPallet(k){
+  if(!(k.l>0&&k.w>0&&k.h>0&&k.pl>0&&k.pw>0)) return null;
   let best=null;
   for(const [a,b,h] of boxUprights(k)){
-    const pat=best2D(c.L,c.W,a,b), layers=fx(c.H,h); let n=pat.n*layers, top=0;
-    const gap=c.H-layers*h;
-    let topInfo=null;
-    if(k.rot==='any') for(const [a2,b2,h2] of boxUprights(k)){ if(h2<=gap+E){ const tp=best2D(c.L,c.W,a2,b2), t=tp.n*fx(gap,h2); if(t>top){ top=t; topInfo={pat:tp,h:h2,layers:fx(gap,h2)}; } } }
-    n+=top;
-    if(!best||n>best.n) best={n,pat,layers,top,topInfo,h,a,b};
-  }
-  if(!best||!best.n) return null;
-  const byW=k.kg>0?fx(c.payload,k.kg):Infinity;
-  const n=Math.min(best.n,byW);
-  return Object.assign(best,{n,space:best.n,limit:n<best.n?'payload':'space'});
-}
-function calcPallets(k,c,tiers){
-  const maxUnitH=Math.min(k.maxH,c.doorH,tiers===2?c.H/2-1:c.H);
-  let best=null;
-  for(const [a,b,h] of boxUprights(k)){
-    const pat=best2D(k.pl,k.pw,a,b); const layers=fx(maxUnitH-k.ph,h); let per=pat.n*layers;
+    const pat=best2D(k.pl,k.pw,a,b); if(!pat.n) continue;
+    const layers=fx(k.maxH-k.ph,h); let per=pat.n*layers;
     const perW=k.kg>0?fx(k.maxKg-k.pkg,k.kg):Infinity; let capped=false;
     if(per>perW){ per=Math.max(0,perW); capped=true; }
     if(per<=0) continue;
-    const usedLayers=Math.ceil(per/pat.n), unitH=k.ph+usedLayers*h;
-    if(!best||per>best.per||(per===best.per&&unitH<best.unitH)) best={per,pat,layers:usedLayers,h,a,b,unitH,capped};
+    const used=Math.ceil(per/pat.n), unitH=k.ph+used*h;
+    if(!best||per>best.per||(per===best.per&&unitH<best.unitH)) best={per,pat,layers:used,h,a,b,unitH,capped};
   }
   if(!best) return null;
-  const floor=best2D(c.L,c.W,k.pl,k.pw);
-  if(!floor.n) return null;
-  const gross=k.pkg+best.per*k.kg;
-  let pallets=floor.n*tiers, limit='space';
-  const byW=gross>0?fx(c.payload,gross):Infinity;
-  if(byW<pallets){ pallets=byW; limit='payload'; }
-  return Object.assign(best,{tiers,floor,pallets,gross,n:pallets*best.per,limit,spacePallets:floor.n*tiers});
+  const r=best; r.lastLayer=r.per-(r.layers-1)*r.pat.n;
+  r.net=r.per*k.kg; r.gross=k.pkg+r.net;
+  r.footUse=r.pat.n*r.a*r.b/(k.pl*k.pw);
+  r.cubeUse=r.per*k.l*k.w*k.h/(k.pl*k.pw*(r.unitH-k.ph));
+  r.heightLeft=k.maxH-r.unitH; r.weightLeft=k.maxKg-r.gross;
+  /* layer rectangles centred on the pallet; interlocked layers are turned 180° so the joints do not line up */
+  const base=r.pat.rects(); const ex=Math.max(...base.map(q=>q.x+q.l)), ey=Math.max(...base.map(q=>q.y+q.w));
+  const ox=(k.pl-ex)/2, oy=(k.pw-ey)/2;
+  const odd=base.map(q=>({x:q.x+ox,y:q.y+oy,l:q.l,w:q.w}));
+  const even=odd.map(q=>({x:k.pl-q.x-q.l,y:k.pw-q.y-q.w,l:q.l,w:q.w}));
+  r.layerRects=i=>(k.pat==='interlock'&&i%2===1)?even:odd;
+  r.interlockDiffers=JSON.stringify(odd.map(q=>[Math.round(q.x),Math.round(q.y),Math.round(q.l)]).sort())!==JSON.stringify(even.map(q=>[Math.round(q.x),Math.round(q.y),Math.round(q.l)]).sort());
+  r.limit=r.capped?'weight':'height';
+  const ship=Math.max(0,Math.floor(k.ship||0));
+  if(ship>0){ r.ship=ship; r.full=Math.floor(ship/r.per); r.rest=ship-r.full*r.per; r.pallets=r.full+(r.rest?1:0); }
+  return r;
 }
-function patSVG(L,W,rects,color,label){
-  const pad=Math.max(L,W)*0.02, sw=Math.max(L,W)/300;
-  let s=`<svg viewBox="${-pad} ${-pad} ${L+pad*2} ${W+pad*2}" role="img" aria-label="${esc(label)}"><rect x="0" y="0" width="${L}" height="${W}" style="fill:var(--floor);stroke:var(--ink)" stroke-width="${sw*1.5}"/>`;
-  for(const r of rects.slice(0,1500)) s+=`<rect x="${r.x}" y="${r.y}" width="${r.l}" height="${r.w}" fill="${color}" style="stroke:var(--surface)" stroke-width="${sw}"/>`;
+function patSVG(L,W,rects,color,label,print){
+  const pad=Math.max(L,W)*0.03, sw=Math.max(L,W)/250;
+  const floorC=print?'#e7edf4':'var(--floor)', ink=print?'#15212a':'var(--ink)', gap=print?'#ffffff':'var(--surface)';
+  let s=`<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-pad} ${-pad} ${L+pad*2} ${W+pad*2}" width="${Math.round((L+pad*2)*4)}" height="${Math.round((W+pad*2)*4)}" role="img" aria-label="${esc(label)}"><rect x="0" y="0" width="${L}" height="${W}" fill="${print?floorC:''}" style="${print?'':'fill:'+floorC+';'}stroke:${ink}" stroke-width="${sw*1.5}"/>`;
+  rects.forEach((r,i)=>{ s+=`<rect x="${r.x}" y="${r.y}" width="${r.l}" height="${r.w}" fill="${color}" ${print?`stroke="${gap}"`:`style="stroke:${gap}"`} stroke-width="${sw}"/>`;
+    if(rects.length<=60) s+=`<text x="${r.x+r.l/2}" y="${r.y+r.w/2}" font-size="${Math.min(r.l,r.w)*0.32}" text-anchor="middle" dominant-baseline="central" fill="#ffffff" font-family="Helvetica,Arial,sans-serif">${i+1}</text>`; });
   return s+'</svg>';
 }
 function readCalc(){
-  const k=state.calc;
-  const v=id=>num($('#'+id).value);
+  const k=calcState(), v=id=>num($('#'+id).value);
   k.l=lenIn(v('bxL')); k.w=lenIn(v('bxW')); k.h=lenIn(v('bxH')); k.kg=wtIn(v('bxKg'));
   k.pl=lenIn(v('plL')); k.pw=lenIn(v('plW')); k.ph=lenIn(v('plH')); k.pkg=wtIn(v('plKg'));
-  k.maxH=lenIn(v('plMaxH')); k.maxKg=wtIn(v('plMaxKg'));
+  k.maxH=lenIn(v('plMaxH')); k.maxKg=wtIn(v('plMaxKg')); k.ship=Math.max(0,Math.floor(v('ppShip'))); k.ref=$('#ppRef').value;
 }
 function fillCalcInputs(){
-  const k=state.calc, set=(id,val)=>{ $('#'+id).value=val?r1(val):''; };
+  const k=calcState(), set=(id,val)=>{ $('#'+id).value=val?r1(val):''; };
   set('bxL',lenOut(k.l)); set('bxW',lenOut(k.w)); set('bxH',lenOut(k.h)); set('bxKg',wtOut(k.kg));
   $('#plType').innerHTML=Object.entries(PALLETS).map(([key,p])=>`<option value="${key}">${p.label}</option>`).join(''); $('#plType').value=k.pt;
   set('plL',lenOut(k.pl)); set('plW',lenOut(k.pw)); set('plH',lenOut(k.ph)); set('plKg',wtOut(k.pkg)); set('plMaxH',lenOut(k.maxH)); set('plMaxKg',wtOut(k.maxKg));
+  $('#ppShip').value=k.ship||''; $('#ppRef').value=k.ref||'';
   document.querySelectorAll('[data-bxrot]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.bxrot===k.rot)));
+  document.querySelectorAll('[data-ppat]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.ppat===k.pat)));
 }
-let calcRes={};
+let PR=null;
+const BOXC='#c8955a', BOXC2='#ddb27d', PALC='#9a6b3c';
 function renderCalc(){
-  const k=state.calc, c=state.c;
-  $('#calcCont').textContent=(PRESETS[state.ctype]?.label||'Custom container')+' · inside '+[c.L,c.W,c.H].map(v=>r1(lenOut(v))).join(' × ')+' '+LU()+' · payload '+fmtW(c.payload)+' (change in Setup)';
-  const ok=k.l>0&&k.w>0&&k.h>0;
-  const loose=ok?calcLoose(k,c):null;
-  const p1=ok&&k.pl>0&&k.pw>0?calcPallets(k,c,1):null;
-  const p2=ok&&k.pl>0&&k.pw>0&&c.H/2-1>=k.ph+k.h?calcPallets(k,c,2):null;
-  calcRes={loose,p1,p2};
-  const boxV=k.l*k.w*k.h, cV=c.L*c.W*c.H;
-  const bestN=Math.max(loose?.n||0,p1?.n||0,p2?.n||0);
-  const limTxt=(r,unit)=>r.limit==='payload'?`<div class="lim w">Limited by payload. Space allows ${(unit==='p'?r.spacePallets*r.per:r.space).toLocaleString('en-US')} boxes.</div>`:`<div class="lim">Limited by space</div>`;
-  const card=(title,r,body,key)=>`<div class="ccard${r&&r.n===bestN&&bestN>0?' best':''}" data-key="${key}"><div class="ct"><b>${title}</b>${r&&r.n===bestN&&bestN>0?'<span class="ist ok">Most boxes</span>':''}</div>${r?body:'<div class="na">'+(key==='p2'?'Two pallets do not fit on top of each other in this container.':'Enter box and pallet sizes.')+'</div>'}${r?`<button class="btn" type="button" data-calcadd="${key}">Add to cargo list</button>`:''}</div>`;
-  const pct=n=>(n*boxV/cV*100).toFixed(0)+'%';
-  const looseBody=loose&&`<div class="big">${loose.n.toLocaleString('en-US')} <small>boxes</small></div><dl>
-    <dt>Per layer on floor</dt><dd>${loose.pat.n}</dd><dt>Layers high</dt><dd>${loose.layers}${loose.top?' + top '+loose.top:''}</dd>
-    <dt>Weight</dt><dd>${fmtW(loose.n*k.kg)}</dd><dt>Volume used</dt><dd>${pct(loose.n)} · ${fmtVol(loose.n*boxV)}</dd></dl>${limTxt(loose,'b')}`;
-  const palBody=r=>r&&`<div class="big">${r.n.toLocaleString('en-US')} <small>boxes</small></div><dl>
-    <dt>Pallets</dt><dd>${r.pallets}${r.tiers===2?' ('+r.floor.n+' × 2 high)':''}</dd><dt>Boxes per pallet</dt><dd>${r.per} (${r.pat.n} × ${r.layers} layers)</dd>
-    <dt>Pallet height</dt><dd>${r1(lenOut(r.unitH))} ${LU()}</dd><dt>Pallet gross weight</dt><dd>${fmtW(r.gross)}</dd>
-    <dt>Total weight</dt><dd>${fmtW(r.pallets*r.gross)}</dd><dt>Box volume used</dt><dd>${pct(r.n)} · ${fmtVol(r.n*boxV)}</dd></dl>${r.capped?'<div class="lim w">Boxes per pallet limited by max pallet weight</div>':''}${limTxt(r,'p')}`;
-  $('#calcCards').innerHTML=card('Loose boxes',loose,looseBody,'loose')+card('On pallets · 1 high',p1,palBody(p1),'p1')+card('On pallets · 2 high',p2,palBody(p2),'p2');
-  const col=COLORS[0], pcol=COLORS[1];
-  let pics='';
-  if(loose) pics+=`<div class="pic"><span class="cap">Loose: floor layer (${loose.pat.n} boxes)</span>${patSVG(c.L,c.W,loose.pat.rects(),col,'Floor layer of loose boxes')}</div>`;
-  const pr=p2||p1;
-  if(p1) pics+=`<div class="pic"><span class="cap">One pallet layer (${p1.pat.n} boxes)</span>${patSVG(k.pl,k.pw,p1.pat.rects(),col,'Boxes on one pallet layer')}</div>`;
-  if(pr) pics+=`<div class="pic"><span class="cap">Pallets on the floor (${pr.floor.n})</span>${patSVG(c.L,c.W,pr.floor.rects(),pcol,'Pallets on the container floor')}</div>`;
-  $('#calcPics').innerHTML=pics?`<h2>Patterns · top view, front wall on the left</h2><div class="pics">${pics}</div><div class="hint">Quick check using straight and mixed (turned) patterns. The full 3D plan can still place a few more or fewer units; use Add to cargo list to check it there.</div>`:'<div class="hint">Enter a box size to see the patterns.</div>';
-  if(!state.calc.view||!calcRes[state.calc.view]){ const order=['loose','p1','p2'].filter(x=>calcRes[x]).sort((a,b)=>calcRes[b].n-calcRes[a].n); state.calc.view=order[0]||'loose'; }
-  calc3DBuild();
+  const k=calcState(); PR=calcPallet(k); const r=PR;
+  if(!r){ $('#ppSummary').innerHTML='<div class="empty">Enter box and pallet sizes. The box must fit on the pallet and below the max height.</div>'; $('#calcPics').innerHTML=''; $('#c3dNote').textContent=''; pallet3DBuild(); store('clp.draft',state); return; }
+  const pct=x=>(x*100).toFixed(0)+'%';
+  const ship=r.ship?`<div class="ship"><div><span class="k">Pallets needed for ${r.ship.toLocaleString('en-US')} boxes</span><b>${r.pallets}</b></div><div class="hint">${r.full} full pallet${r.full===1?'':'s'} of ${r.per}${r.rest?` + 1 pallet with ${r.rest} box${r.rest===1?'':'es'}`:''}</div></div>`:'';
+  $('#ppSummary').innerHTML=`<div class="ppsum">
+    <div class="ppbig"><div><span class="k">Boxes per pallet</span><b>${r.per}</b></div><div class="hint">${r.pat.n} per layer × ${r.layers} layer${r.layers===1?'':'s'}${r.lastLayer<r.pat.n?` (top layer ${r.lastLayer})`:''}</div></div>
+    ${ship}
+    <dl class="ppdl">
+      <dt>Load height incl. pallet</dt><dd>${r1(lenOut(r.unitH))} ${LU()}</dd>
+      <dt>Gross weight</dt><dd>${fmtW(r.gross)}</dd>
+      <dt>Net weight (boxes)</dt><dd>${fmtW(r.net)}</dd>
+      <dt>Box orientation</dt><dd>${r1(lenOut(r.a))}×${r1(lenOut(r.b))} footprint, ${r1(lenOut(r.h))} high</dd>
+      <dt>Pallet area used</dt><dd>${pct(r.footUse)}</dd>
+      <dt>Volume used</dt><dd>${pct(r.cubeUse)} · ${fmtVol(r.per*k.l*k.w*k.h)}</dd>
+      <dt>Height left</dt><dd>${r1(lenOut(r.heightLeft))} ${LU()}</dd>
+      <dt>Weight left</dt><dd>${fmtW(Math.max(0,r.weightLeft))}</dd>
+    </dl>
+    <div class="lim${r.limit==='weight'?' w':''}">${r.limit==='weight'?'Limited by max pallet weight':'Limited by max height'}${k.pat==='interlock'&&!r.interlockDiffers?' · this pattern is the same when turned, so layers stack in columns':''}</div>
+  </div>`;
+  const first=r.layerRects(0), second=r.layerRects(1);
+  let pics=`<div class="pic"><span class="cap">${k.pat==='interlock'&&r.interlockDiffers?'Odd layers (1, 3, 5…)':'Every layer'} · ${r.pat.n} boxes</span>${patSVG(k.pl,k.pw,first,BOXC,'Layer pattern')}</div>`;
+  if(k.pat==='interlock'&&r.interlockDiffers) pics+=`<div class="pic"><span class="cap">Even layers (2, 4, 6…) · turned</span>${patSVG(k.pl,k.pw,second,BOXC2,'Turned layer pattern')}</div>`;
+  if(r.lastLayer<r.pat.n){ const top=r.layerRects(r.layers-1).slice(0,r.lastLayer); pics+=`<div class="pic"><span class="cap">Top layer · ${r.lastLayer} boxes</span>${patSVG(k.pl,k.pw,top,BOXC,'Top layer')}</div>`; }
+  $('#calcPics').innerHTML=`<h2>Layer patterns · top view</h2><div class="pics">${pics}</div><div class="hint">Numbers show a placing order. Pallet length runs left to right.</div>`;
+  $('#c3dNote').textContent=`${r.per} boxes · ${r1(lenOut(r.unitH))} ${LU()} · ${fmtW(r.gross)}`;
+  pallet3DBuild();
   store('clp.draft',state);
 }
-/* ---------- box calculator 3D view (own scene, separate from the load plan) ---------- */
-const CV={ok:false,init:false,mode:'iso'};
-function calc3DInit(){
-  if(CV.init) return; CV.init=true;
+/* ---- 3D view of one pallet ---- */
+const PV={ok:false,init:false,mode:'iso'};
+function pallet3DInit(){
+  if(PV.init) return; PV.init=true;
   if(!window.THREE||!THREE.OrbitControls){ $('#c3dBox').hidden=true; $('#c3dFail').hidden=false; return; }
   try{
-    const el=$('#c3d'); const ren=new THREE.WebGLRenderer({antialias:true,alpha:true}); ren.setPixelRatio(Math.min(2,window.devicePixelRatio||1)); el.appendChild(ren.domElement);
-    const scene=new THREE.Scene(); const cam=new THREE.PerspectiveCamera(35,1,0.05,300);
-    scene.add(new THREE.AmbientLight(0xffffff,0.62)); const d1=new THREE.DirectionalLight(0xffffff,0.55); d1.position.set(6,12,9); scene.add(d1); const d2=new THREE.DirectionalLight(0xffffff,0.22); d2.position.set(-8,5,-6); scene.add(d2);
+    const el=$('#c3d'); const ren=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true}); ren.setPixelRatio(Math.min(2,window.devicePixelRatio||1)); el.appendChild(ren.domElement);
+    const scene=new THREE.Scene(); const cam=new THREE.PerspectiveCamera(35,1,0.01,100);
+    scene.add(new THREE.AmbientLight(0xffffff,0.6)); const d1=new THREE.DirectionalLight(0xffffff,0.6); d1.position.set(3,6,4); scene.add(d1); const d2=new THREE.DirectionalLight(0xffffff,0.25); d2.position.set(-4,3,-3); scene.add(d2);
     const ctl=new THREE.OrbitControls(cam,ren.domElement); ctl.screenSpacePanning=true; ctl.addEventListener('change',()=>ren.render(scene,cam));
-    Object.assign(CV,{ok:true,el,ren,scene,cam,ctl,world:null});
-    new ResizeObserver(()=>calc3DSize()).observe(el);
-  }catch(e){ CV.ok=false; $('#c3dBox').hidden=true; $('#c3dFail').hidden=false; }
+    Object.assign(PV,{ok:true,el,ren,scene,cam,ctl,world:null});
+    new ResizeObserver(()=>pallet3DSize()).observe(el);
+  }catch(e){ PV.ok=false; $('#c3dBox').hidden=true; $('#c3dFail').hidden=false; }
 }
-function calc3DSize(){ if(!CV.ok) return; const w=CV.el.clientWidth,h=CV.el.clientHeight; if(!w||!h) return; CV.ren.setSize(w,h,false); CV.cam.aspect=w/h; CV.cam.updateProjectionMatrix(); calc3DCam(CV.mode); }
-function calc3DCam(mode){ if(!CV.ok) return; CV.mode=mode; const p=camPose(mode,CV.cam.aspect||1.6,state.c); CV.cam.position.copy(p.pos); CV.ctl.target.copy(p.target); CV.cam.up.set(0,1,0); CV.ctl.update(); CV.ren.render(CV.scene,CV.cam); }
-/* every box (and pallet) position for one calculator option, front wall first */
-function calcUnits(key){
-  const k=state.calc, c=state.c, r=calcRes[key]; if(!r) return null;
-  const out=[];
-  const centreY=(rects,W)=>{ const mx=Math.max(0,...rects.map(q=>q.y+q.w)); const dy=(W-mx)/2; return rects.map(q=>({x:q.x,y:q.y+dy,l:q.l,w:q.w})); };
-  if(key==='loose'){
-    const fl=centreY(r.pat.rects(),c.W);
-    for(let i=0;i<r.layers;i++) for(const q of fl) out.push({x:q.x,y:q.y,z:i*r.h,l:q.l,w:q.w,h:r.h,shade:i%2});
-    if(r.topInfo){ const tp=centreY(r.topInfo.pat.rects(),c.W); for(let j=0;j<r.topInfo.layers;j++) for(const q of tp) out.push({x:q.x,y:q.y,z:r.layers*r.h+j*r.topInfo.h,l:q.l,w:q.w,h:r.topInfo.h,shade:(r.layers+j)%2}); }
-    out.sort((p,q)=>(p.x-q.x)||(p.z-q.z)||(p.y-q.y));
-    return {boxes:out.slice(0,r.n),pallets:[]};
+function pallet3DSize(){ if(!PV.ok) return; const w=PV.el.clientWidth,h=PV.el.clientHeight; if(!w||!h) return; PV.ren.setSize(w,h,false); PV.cam.aspect=w/h; PV.cam.updateProjectionMatrix(); pallet3DCam(PV.mode); }
+function pallet3DCam(mode){
+  if(!PV.ok) return; PV.mode=mode;
+  const k=calcState(), Hm=(PR?PR.unitH:k.ph+20)/100, Lm=k.pl/100, Wm=k.pw/100;
+  const dirs={iso:[0.85,0.7,1.05],top:[0.0001,1,0.0001],side:[0,0.12,1],front:[1,0.12,0.0001]};
+  const v=new THREE.Vector3(...dirs[mode]).normalize();
+  const rad=0.5*Math.sqrt(Lm*Lm+Wm*Wm+Hm*Hm), vf=35*Math.PI/180, hf=2*Math.atan(Math.tan(vf/2)*(PV.cam.aspect||1));
+  const dist=rad/Math.sin(Math.min(vf,hf)/2)*1.02;
+  const target=new THREE.Vector3(0,mode==='top'?0:Hm/2,0);
+  PV.cam.position.copy(target.clone().add(v.multiplyScalar(dist))); PV.ctl.target.copy(target); PV.cam.up.set(0,1,0); PV.ctl.update(); PV.ren.render(PV.scene,PV.cam);
+}
+function pallet3DBuild(){
+  if(!PV.ok) return;
+  const k=calcState(), r=PR;
+  if(PV.world){ PV.world.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose()); } }); PV.scene.remove(PV.world); }
+  const W=new THREE.Group(); PV.world=W; PV.scene.add(W);
+  const Lm=k.pl/100, Wm=k.pw/100, ph=k.ph/100;
+  const P={ink:css('--ink'),muted:css('--muted'),floor:css('--floor')};
+  const ground=new THREE.Mesh(new THREE.PlaneGeometry(Lm*1.6,Wm*1.6),new THREE.MeshLambertMaterial({color:P.floor,side:THREE.DoubleSide})); ground.rotation.x=-Math.PI/2; ground.position.y=-0.001; W.add(ground);
+  /* pallet: top deck, nine blocks, three bottom boards */
+  const wood=new THREE.MeshLambertMaterial({color:PALC}), woodL=new THREE.MeshLambertMaterial({color:'#b8844f'});
+  const part=(x,y,z,l,h,w,m)=>{ const g=new THREE.Mesh(new THREE.BoxGeometry(l,h,w),m); g.position.set(x,y,z); W.add(g); };
+  const deck=Math.min(0.022,ph*0.25), bot=Math.min(0.022,ph*0.2), blk=ph-deck-bot;
+  part(0,ph-deck/2,0,Lm,deck,Wm,woodL);
+  const bx=Math.min(0.145,Lm/5), bw=Math.min(0.1,Wm/5);
+  for(const x of [-(Lm-bx)/2,0,(Lm-bx)/2]) for(const z of [-(Wm-bw)/2,0,(Wm-bw)/2]) part(x,bot+blk/2,z,bx,blk,bw,wood);
+  for(const z of [-(Wm-bw)/2,0,(Wm-bw)/2]) part(0,bot/2,z,Lm,bot,bw,woodL);
+  if(r){
+    const unit=new THREE.BoxGeometry(1,1,1), m4=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3(), ps=new THREE.Vector3();
+    const im=new THREE.InstancedMesh(unit,new THREE.MeshLambertMaterial({color:0xffffff}),r.per); im.frustumCulled=false;
+    const A=new THREE.Color(BOXC), B=new THREE.Color(BOXC2); const pts=[]; let n=0;
+    for(let li=0;li<r.layers;li++){ const rects=r.layerRects(li); for(const b of rects){ if(n>=r.per) break;
+      const x0=b.x/100-Lm/2, z0=b.y/100-Wm/2, y0=ph+li*r.h/100, L=b.l/100, H=r.h/100, D=b.w/100, g=0.002;
+      ps.set(x0+L/2,y0+H/2,z0+D/2); sc.set(L-g,H-g,D-g); m4.compose(ps,q,sc); im.setMatrixAt(n,m4); im.setColorAt(n,li%2?B:A); n++;
+      const X0=x0+g/2,X1=x0+L-g/2,Y0=y0+g/2,Y1=y0+H-g/2,Z0=z0+g/2,Z1=z0+D-g/2;
+      const C=[[X0,Y0,Z0],[X1,Y0,Z0],[X1,Y0,Z1],[X0,Y0,Z1],[X0,Y1,Z0],[X1,Y1,Z0],[X1,Y1,Z1],[X0,Y1,Z1]];
+      [[0,1],[1,2],[2,3],[3,0],[4,5],[5,6],[6,7],[7,4],[0,4],[1,5],[2,6],[3,7]].forEach(([i,j])=>pts.push(...C[i],...C[j])); } }
+    W.add(im);
+    const eg=new THREE.BufferGeometry(); eg.setAttribute('position',new THREE.Float32BufferAttribute(pts,3)); const el=new THREE.LineSegments(eg,new THREE.LineBasicMaterial({color:'#6b4a26',transparent:true,opacity:0.7})); el.frustumCulled=false; W.add(el);
   }
-  const fl=centreY(r.floor.rects(),c.W).sort((p,q)=>(p.x-q.x)||(p.y-q.y));
-  const lay=r.pat.rects(); const ex=Math.max(...lay.map(q=>q.x+q.l)), ey=Math.max(...lay.map(q=>q.y+q.w));
-  const ox=(k.pl-ex)/2, oy=(k.pw-ey)/2;
-  const slots=[]; for(const f of fl) for(let t=0;t<r.tiers;t++) slots.push({f,t});
-  const pallets=[], boxes=[];
-  for(const {f,t} of slots.slice(0,r.pallets)){
-    const base=t*r.unitH, turned=Math.abs(f.l-k.pl)>E;
-    pallets.push({x:f.x,y:f.y,z:base,l:f.l,w:f.w,h:k.ph});
-    let n=0;
-    for(let li=0;li<r.layers&&n<r.per;li++) for(const q of lay){ if(n>=r.per) break;
-      const bx=q.x+ox, by=q.y+oy;
-      boxes.push(turned?{x:f.x+by,y:f.y+bx,z:base+k.ph+li*r.h,l:q.w,w:q.l,h:r.h,shade:li%2}:{x:f.x+bx,y:f.y+by,z:base+k.ph+li*r.h,l:q.l,w:q.w,h:r.h,shade:li%2}); n++; }
-  }
-  return {boxes,pallets};
+  /* max height frame */
+  const mh=k.maxH/100; if(mh>ph){ const fr=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(Lm,mh,Wm)),new THREE.LineBasicMaterial({color:P.muted,transparent:true,opacity:0.45})); fr.position.set(0,mh/2,0); W.add(fr); }
+  if(!PV.sized){ PV.sized=true; pallet3DSize(); } else pallet3DCam(PV.mode);
 }
-function calc3DBuild(){
-  if(!CV.ok) return;
-  const k=state.calc, c=state.c;
-  const avail=['loose','p1','p2'].filter(x=>calcRes[x]);
-  document.querySelectorAll('[data-c3d]').forEach(b=>{ b.disabled=!calcRes[b.dataset.c3d]; b.setAttribute('aria-pressed',String(b.dataset.c3d===k.view)); });
-  if(!avail.length){ $('#c3dNote').textContent='Enter a box size to see the 3D view.'; return; }
-  document.querySelectorAll('.ccard').forEach(el=>el.classList.toggle('viewing',el.dataset.key===k.view));
-  if(!calcRes[k.view]){ k.view=avail[0]; document.querySelectorAll('[data-c3d]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.c3d===k.view))); }
-  document.querySelectorAll('.ccard').forEach(el=>el.classList.toggle('viewing',el.dataset.key===k.view));
-  const u=calcUnits(k.view); const MAXI=30000;
-  if(CV.world){ CV.world.traverse(o=>{ if(o.geometry) o.geometry.dispose(); if(o.material){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{ if(m.map) m.map.dispose(); m.dispose(); }); } }); CV.scene.remove(CV.world); }
-  const W=new THREE.Group(); CV.world=W; CV.scene.add(W);
-  const Lm=c.L/100,Wm=c.W/100,Hm=c.H/100;
-  const P={ink:css('--ink'),muted:css('--muted'),line:css('--line'),floor:css('--floor'),accent:css('--accent')};
-  const floor=new THREE.Mesh(new THREE.PlaneGeometry(Lm,Wm),new THREE.MeshLambertMaterial({color:P.floor,side:THREE.DoubleSide})); floor.rotation.x=-Math.PI/2; W.add(floor);
-  const fw=new THREE.Mesh(new THREE.PlaneGeometry(Wm,Hm),new THREE.MeshBasicMaterial({color:P.muted,transparent:true,opacity:0.16,side:THREE.DoubleSide,depthWrite:false})); fw.rotation.y=Math.PI/2; fw.position.set(-Lm/2,Hm/2,0); W.add(fw);
-  const sw=new THREE.Mesh(new THREE.PlaneGeometry(Lm,Hm),new THREE.MeshBasicMaterial({color:P.muted,transparent:true,opacity:0.07,side:THREE.DoubleSide,depthWrite:false})); sw.position.set(0,Hm/2,-Wm/2); W.add(sw);
-  const bx=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(Lm,Hm,Wm)),new THREE.LineBasicMaterial({color:P.ink,transparent:true,opacity:0.55})); bx.position.set(0,Hm/2,0); W.add(bx);
-  const lh=Math.max(0.22,Lm/40);
-  const t1=textSprite('FRONT WALL',P.muted,lh); t1.position.set(-Lm/2,Hm+lh*0.9,0); W.add(t1);
-  const t2=textSprite('DOORS',P.accent,lh); t2.position.set(Lm/2,Hm+lh*0.9,0); W.add(t2);
-  const unit=new THREE.BoxGeometry(1,1,1), m4=new THREE.Matrix4(), q=new THREE.Quaternion(), sc=new THREE.Vector3(), ps=new THREE.Vector3();
-  const addSet=(list,colA,colB,gap)=>{ if(!list.length) return; const n=Math.min(list.length,MAXI);
-    const im=new THREE.InstancedMesh(unit,new THREE.MeshLambertMaterial({color:0xffffff}),n); im.frustumCulled=false;
-    const A=new THREE.Color(colA), B=new THREE.Color(colB);
-    for(let i=0;i<n;i++){ const b=list[i]; ps.set((b.x+b.l/2)/100-Lm/2,(b.z+b.h/2)/100,(b.y+b.w/2)/100-Wm/2); sc.set(Math.max(0.005,b.l/100-gap),Math.max(0.005,b.h/100-gap),Math.max(0.005,b.w/100-gap)); m4.compose(ps,q,sc); im.setMatrixAt(i,m4); im.setColorAt(i,b.shade?B:A); }
-    W.add(im); };
-  const boxCol=COLORS[0], boxCol2='#'+[1,3,5].map(i=>{ const v=parseInt(boxCol.slice(i,i+2),16); return Math.round(v+(255-v)*0.3).toString(16).padStart(2,'0'); }).join('');
-  addSet(u.boxes,boxCol,boxCol2,0.008);
-  addSet(u.pallets.map(p=>Object.assign({shade:0},p)),'#c99a5b','#c99a5b',0.01);
-  const r=calcRes[k.view];
-  $('#c3dNote').textContent=(k.view==='loose'?`${r.n.toLocaleString('en-US')} loose boxes`:`${r.pallets} pallets × ${r.per} boxes = ${r.n.toLocaleString('en-US')} boxes`)+(u.boxes.length>MAXI?` · showing the first ${MAXI.toLocaleString('en-US')} boxes`:'')+' · light and dark blue mark alternate layers';
-  if(!CV.sized){ CV.sized=true; calc3DSize(); } else calc3DCam(CV.mode);
+/* ---- export ---- */
+function palletSummary(){
+  const k=calcState(), r=PR; if(!r) return '';
+  const L=[];
+  L.push('PALLET LOAD PLAN'+(k.ref?' - '+k.ref:'')); L.push('Date: '+new Date().toLocaleDateString()); L.push('');
+  L.push('Box: '+[k.l,k.w,k.h].map(v=>r1(lenOut(v))).join(' x ')+' '+LU()+', '+fmtW(k.kg)+', '+(k.rot==='any'?'any orientation':'this side up'));
+  L.push('Pallet: '+(PALLETS[k.pt]?.label||'Custom')+' - '+[k.pl,k.pw,k.ph].map(v=>r1(lenOut(v))).join(' x ')+' '+LU()+', empty '+fmtW(k.pkg));
+  L.push('Limits: max height '+r1(lenOut(k.maxH))+' '+LU()+' incl. pallet, max gross '+fmtW(k.maxKg)); L.push('');
+  L.push('Boxes per pallet: '+r.per+' ('+r.pat.n+' per layer x '+r.layers+' layers'+(r.lastLayer<r.pat.n?', top layer '+r.lastLayer:'')+')');
+  L.push('Stacking: '+(k.pat==='interlock'&&r.interlockDiffers?'interlocked, every 2nd layer turned':'column'));
+  L.push('Box placed '+r1(lenOut(r.a))+' x '+r1(lenOut(r.b))+' footprint, '+r1(lenOut(r.h))+' '+LU()+' high');
+  L.push('Load height incl. pallet: '+r1(lenOut(r.unitH))+' '+LU());
+  L.push('Gross weight: '+fmtW(r.gross)+' (boxes '+fmtW(r.net)+')');
+  L.push('Pallet area used: '+(r.footUse*100).toFixed(0)+'%, volume used: '+(r.cubeUse*100).toFixed(0)+'%');
+  if(r.ship) L.push('Shipment: '+r.ship+' boxes = '+r.pallets+' pallets ('+r.full+' full'+(r.rest?' + 1 with '+r.rest+' boxes':'')+')');
+  return L.join('\n').replace(/×/g,'x').replace(/³/g,'3');
 }
-function openCalc(){ if(!state.calc) state.calc=Object.assign({},CALC_DEF); fillCalcInputs(); renderUnits(); renderCalc(); $('#calcSheet').hidden=false; document.body.style.overflow='hidden'; calc3DInit(); calc3DBuild(); requestAnimationFrame(()=>calc3DSize()); $('#bxL').focus(); }
+$('#ppCopy').onclick=async()=>{
+  const txt=palletSummary(); if(!txt) return; $('#ppCopyFallback').innerHTML='';
+  try{ await navigator.clipboard.writeText(txt); toast('Pallet summary copied'); }
+  catch(e){ $('#ppCopyFallback').innerHTML='<textarea class="copyfallback" id="ppcf" readonly></textarea><div class="hint">Copy was blocked here. The text is selected; copy it manually.</div>'; const ta=$('#ppcf'); ta.value=txt; ta.focus(); ta.select(); }
+};
+$('#ppPdf').onclick=async()=>{
+  const k=calcState(), r=PR; if(!r) return;
+  if(!downloads||!window.jspdf){ toast('PDF download is not available here. Use Copy summary.'); return; }
+  const btn=$('#ppPdf'); btn.disabled=true; btn.textContent='Building PDF…';
+  try{
+    const {jsPDF}=window.jspdf; const doc=new jsPDF({orientation:'portrait',unit:'mm',format:'a4'});
+    const PW=210,PH=297,m=14,cw=PW-2*m; let y=m;
+    const clean=s=>String(s).replace(/[–—]/g,'-').replace(/×/g,'x').replace(/³/g,'3').replace(/²/g,'2').replace(/[^\x20-\x7E -ÿ]/g,'');
+    const line=(t,size,bold,col)=>{ doc.setFont('helvetica',bold?'bold':'normal'); doc.setFontSize(size); doc.setTextColor(...(col||[21,33,42])); doc.splitTextToSize(clean(t),cw).forEach(l=>{ if(y>PH-m){doc.addPage();y=m;} doc.text(l,m,y); y+=size*0.42; }); };
+    line('Pallet load plan'+(k.ref?' - '+k.ref:''),17,true); y+=1;
+    line(new Date().toLocaleDateString()+'  |  '+(PALLETS[k.pt]?.label||'Custom pallet'),9,false,[85,99,111]); y+=3;
+    doc.setFillColor(255,243,211); doc.rect(m,y-4,cw,r.ship?20:13,'F');
+    line('Boxes per pallet: '+r.per+'   ('+r.pat.n+' per layer x '+r.layers+' layers'+(r.lastLayer<r.pat.n?', top layer '+r.lastLayer:'')+')',12,true);
+    line('Load height '+r1(lenOut(r.unitH))+' '+LU()+'   |   Gross weight '+fmtW(r.gross),10,false);
+    if(r.ship) line('Shipment: '+r.ship+' boxes = '+r.pallets+' pallets ('+r.full+' full'+(r.rest?' + 1 with '+r.rest+' boxes':'')+')',10,true);
+    y+=5;
+    let img=null; if(PV.ok){ try{ pallet3DCam('iso'); img=PV.ren.domElement.toDataURL('image/png'); }catch(e){} }
+    if(img){ const cv=PV.ren.domElement; const iw=cw*0.62, ih=iw*cv.height/cv.width; doc.addImage(img,'PNG',m+(cw-iw)/2,y,iw,Math.min(ih,95)); y+=Math.min(ih,95)+4; }
+    const pats=[[r.layerRects(0),k.pat==='interlock'&&r.interlockDiffers?'Odd layers (1, 3, 5...)':'Every layer']];
+    if(k.pat==='interlock'&&r.interlockDiffers) pats.push([r.layerRects(1),'Even layers (2, 4, 6...) - turned']);
+    if(r.lastLayer<r.pat.n) pats.push([r.layerRects(r.layers-1).slice(0,r.lastLayer),'Top layer - '+r.lastLayer+' boxes']);
+    const gw=(cw-(pats.length-1)*6)/pats.length, gh=gw*k.pw/k.pl;
+    if(y+gh+12>PH-m){ doc.addPage(); y=m; }
+    for(let i=0;i<pats.length;i++){ const [rects,cap]=pats[i]; const svg=patSVG(k.pl,k.pw,rects,i===1&&pats[1][1].startsWith('Even')?BOXC2:BOXC,cap,true);
+      const png=await svgToPng(svg,900,Math.round(900*k.pw/k.pl)); const x=m+i*(gw+6);
+      doc.setFont('helvetica','bold'); doc.setFontSize(9); doc.setTextColor(85,99,111); doc.text(clean(cap),x,y); doc.addImage(png,'PNG',x,y+2,gw,gh); }
+    y+=gh+10;
+    line('Details',12,true); y+=1;
+    palletSummary().split('\n').slice(3).filter(Boolean).forEach(t=>line(t,9.5,false));
+    y+=3; line('Planning estimate. Check box strength, pallet and transport limits, and secure the load with stretch film or straps.',8,false,[85,99,111]);
+    const base=((k.ref||'pallet-plan').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'-')||'pallet-plan');
+    await save(base+'.pdf',doc.output('blob'));
+  }catch(e){ toast('Could not build the PDF'); }
+  finally{ btn.disabled=false; btn.textContent='Download PDF'; pallet3DCam(PV.mode); }
+};
+$('#ppAdd').onclick=()=>{
+  const k=calcState(), r=PR; if(!r) return;
+  const qty=r.ship?r.full:1;
+  const add=(n,per,layers)=>{ if(n<=0) return; const h=k.ph+layers*r.h; const it=mkItem({name:`Pallet ${per} boxes${k.ref?' – '+k.ref:''}`,l:k.pl,w:k.pw,h,kg:k.pkg+per*k.kg,qty:n,stack:false,maxTop:0,rot:'floor'},0); it.color=nextColor(); state.items.push(it); };
+  add(qty,r.per,r.layers);
+  if(r.ship&&r.rest) add(1,r.rest,Math.ceil(r.rest/r.pat.n));
+  exampleOff(); renderItems(); schedule(); closeCalc();
+  toast(r.ship?`Added ${r.pallets} pallet${r.pallets===1?'':'s'} to the cargo list`:'Added 1 pallet to the cargo list');
+};
+/* ---- open / close / inputs ---- */
+function openCalc(){ calcState(); fillCalcInputs(); renderUnits(); $('#calcSheet').hidden=false; document.body.style.overflow='hidden'; pallet3DInit(); renderCalc(); requestAnimationFrame(()=>pallet3DSize()); $('#bxL').focus(); }
 function closeCalc(){ $('#calcSheet').hidden=true; document.body.style.overflow=''; $('#openCalc').focus(); }
 $('#openCalc').onclick=openCalc; $('#calcClose').onclick=closeCalc;
 $('#calcSheet').addEventListener('click',e=>{ if(e.target===$('#calcSheet')) closeCalc(); });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&!$('#calcSheet').hidden) closeCalc(); });
 let calcT=null;
-$('#calcSheet').addEventListener('input',e=>{ if(e.target.id==='plType') return; if(e.target.id&&/^(pl[LWH]|plKg)$/.test(e.target.id)){ state.calc.pt='CUSTOM'; $('#plType').value='CUSTOM'; } readCalc(); clearTimeout(calcT); calcT=setTimeout(renderCalc,120); });
-$('#plType').addEventListener('change',e=>{ const k=state.calc, p=PALLETS[e.target.value]; k.pt=e.target.value; if(p&&p.L){ k.pl=p.L; k.pw=p.W; k.ph=p.H; k.pkg=p.kg; } fillCalcInputs(); renderCalc(); });
+$('#calcSheet').addEventListener('input',e=>{ if(e.target.id==='plType') return; if(/^(pl[LWH]|plKg)$/.test(e.target.id||'')){ calcState().pt='CUSTOM'; $('#plType').value='CUSTOM'; } readCalc(); clearTimeout(calcT); calcT=setTimeout(renderCalc,120); });
+$('#plType').addEventListener('change',e=>{ const k=calcState(), p=PALLETS[e.target.value]; k.pt=e.target.value; if(p&&p.L){ k.pl=p.L; k.pw=p.W; k.ph=p.H; k.pkg=p.kg; } fillCalcInputs(); renderCalc(); });
 $('#calcSheet').addEventListener('click',e=>{
-  const vb=e.target.closest('[data-c3d]'); if(vb&&!vb.disabled){ state.calc.view=vb.dataset.c3d; calc3DBuild(); return; }
-  const cb=e.target.closest('[data-ccam]'); if(cb){ calc3DCam(cb.dataset.ccam); return; }
-  const cc=e.target.closest('.ccard'); if(cc&&!e.target.closest('button')&&cc.dataset.key&&calcRes[cc.dataset.key]){ state.calc.view=cc.dataset.key; calc3DBuild(); $('#c3dWrap').scrollIntoView({behavior:'smooth',block:'nearest'}); return; }
-  const rb=e.target.closest('[data-bxrot]'); if(rb){ state.calc.rot=rb.dataset.bxrot; fillCalcInputs(); renderCalc(); return; }
-  const ab=e.target.closest('[data-calcadd]'); if(!ab) return;
-  const k=state.calc, key=ab.dataset.calcadd, r=calcRes[key]; if(!r) return;
-  let it;
-  if(key==='loose') it=mkItem({name:`Box ${[k.l,k.w,k.h].map(v=>r1(lenOut(v))).join('×')}`,l:k.l,w:k.w,h:k.h,kg:k.kg,qty:r.n,stack:true,maxTop:0,rot:k.rot},0);
-  else it=mkItem({name:`Pallet ${r.per} boxes`,l:k.pl,w:k.pw,h:r.unitH,kg:r.gross,qty:r.pallets,stack:r.tiers===2,maxTop:r.tiers===2?r.gross:0,rot:'floor'},0);
-  it.color=nextColor(); state.items.push(it); exampleOff(); renderItems(); schedule(); closeCalc();
-  toast(`Added ${it.qty} × ${it.name} to the cargo list`);
+  const cb=e.target.closest('[data-ccam]'); if(cb){ pallet3DCam(cb.dataset.ccam); return; }
+  const rb=e.target.closest('[data-bxrot]'); if(rb){ calcState().rot=rb.dataset.bxrot; fillCalcInputs(); renderCalc(); return; }
+  const pb=e.target.closest('[data-ppat]'); if(pb){ calcState().pat=pb.dataset.ppat; fillCalcInputs(); renderCalc(); return; }
 });
 /* ---------- panes / tabs ---------- */
 const mqPhone=window.matchMedia('(max-width:759px)'), mqWide=window.matchMedia('(min-width:1280px)');
